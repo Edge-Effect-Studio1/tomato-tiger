@@ -13,8 +13,12 @@ const {seriesForSubjects} = require('./_lib/sentinel.js');
 const {detect} = require('./_lib/phenology.js');
 
 const MAX_RING_POINTS = 3000; // matches submit.js's own boundary cap order of magnitude
-const MAX_WINDOW_DAYS = 200;  // ~6.5 months - long enough for one growing season, short enough to
-                               // have a real chance of finishing inside the function's time budget
+// ~15.5 months - covers phenology.js's own expected input window (Oct of the prior year through
+// Dec of the season year), for a client that has no planting date yet to anchor a tighter range.
+// Verified live against production 2026-09-22: a real ~10.5-month query over a small test polygon
+// took 22s, well inside DEADLINE_MS below - a naive worry (Headwaters' own docs record a 15-month
+// pull over a real ~70-acre field taking 3m24s) turned out not to apply at this polygon size.
+const MAX_WINDOW_DAYS = 470;
 const DEADLINE_MS = 55000;    // stay under vercel.json's maxDuration with room to send a real response
 
 function parseRing(raw) {

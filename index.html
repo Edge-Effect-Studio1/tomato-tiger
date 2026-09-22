@@ -49,6 +49,10 @@
   .sec-check{display:inline-block;margin-left:6px;color:var(--good);font-weight:700;opacity:0;transform:scale(.6);
     transition:opacity .3s ease,transform .3s ease}
   .card.sec-complete .sec-check{opacity:1;transform:scale(1)}
+  /* A small checkmark alone was too easy to miss as a "this section is done" signal - the whole card
+     tints a light, unmistakable green instead, with the checkmark kept as a secondary reinforcement. */
+  .card{transition:background-color .4s ease,border-color .4s ease}
+  .card.sec-complete{background:#eaf3e1;border-color:#bcd6a0}
   p{margin:0 0 8px;line-height:1.45}
   button{cursor:pointer;font:inherit;border:0;border-radius:8px;padding:10px 14px;min-height:44px;
     background:var(--green);color:var(--cream);font-weight:600}

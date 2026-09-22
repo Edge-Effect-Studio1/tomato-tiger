@@ -658,17 +658,47 @@ document.addEventListener('change', e => { if (e.target.id === 'q-cropsoil-0-ass
 // point for the planting/harvest dates above - never written in without a tap, same as every other
 // suggestion on this page.
 const ndviState = {status: 'idle', data: null};
+const MONTH_ABBR_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_ABBR_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+// A bare line with no axes reads as decoration, not information - a grower has no way to tell "this
+// peak is June" from "this peak is September," or what a value of 0.6 even means. Left margin carries
+// three NDVI gridlines (0 = bare ground, 0.5, 1.0 = full dense canopy); bottom margin carries one
+// month tick per calendar month in range (thinned to every 2nd/3rd if the window is long, so labels
+// never overlap).
 function ndviChartSvg(series) {
   const usable = (series || []).filter(p => p.usable && p.ndvi != null);
   if (usable.length < 2) return `<p class="hint">${esc(T('Not enough clear satellite looks to draw a chart for this window.', 'No hay suficientes lecturas satelitales claras para dibujar un gráfico en esta ventana.'))}</p>`;
-  const W = 280, H = 110, pad = 8;
+  const W = 300, H = 130, padL = 26, padR = 8, padT = 8, padB = 18;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
   const times = usable.map(p => new Date(p.date + 'T00:00:00Z').getTime());
   const t0 = Math.min(...times), t1 = Math.max(...times) || t0 + 1;
-  const x = t => pad + (W - 2 * pad) * (t - t0) / Math.max(1, t1 - t0);
-  const y = v => H - pad - (H - 2 * pad) * Math.max(0, Math.min(1, v));
+  const x = t => padL + plotW * (t - t0) / Math.max(1, t1 - t0);
+  const y = v => padT + plotH - plotH * Math.max(0, Math.min(1, v));
   const d = usable.map((p, i) => `${i ? 'L' : 'M'}${x(new Date(p.date + 'T00:00:00Z').getTime()).toFixed(1)},${y(p.ndvi).toFixed(1)}`).join('');
   const dots = usable.map(p => `<circle cx="${x(new Date(p.date + 'T00:00:00Z').getTime()).toFixed(1)}" cy="${y(p.ndvi).toFixed(1)}" r="2" fill="#3f7d3f"/>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" class="ndvi-svg" role="img" aria-label="${esc(T('Satellite greenness (NDVI) over time', 'Verdor satelital (NDVI) a lo largo del tiempo'))}"><path d="${d}" fill="none" stroke="#3f7d3f" stroke-width="1.5"/>${dots}</svg>`;
+  const yTicks = [0, 0.5, 1].map(v => `<line x1="${padL}" x2="${W - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#d8d8c8" stroke-width="1"/>` +
+    `<text x="${padL - 4}" y="${(y(v) + 3).toFixed(1)}" font-size="9" fill="#5f6350" text-anchor="end">${v.toFixed(1)}</text>`).join('');
+  // One label per month boundary crossed, thinned so consecutive labels stay readably apart.
+  const monthMarks = [];
+  const d0 = new Date(t0), d1 = new Date(t1);
+  let cursor = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), 1));
+  while (cursor.getTime() <= t1) {
+    if (cursor.getTime() >= t0) monthMarks.push(cursor.getTime());
+    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+  }
+  const monthSpan = (d1.getUTCFullYear() - d0.getUTCFullYear()) * 12 + (d1.getUTCMonth() - d0.getUTCMonth()) + 1;
+  const everyNth = monthSpan > 8 ? 3 : monthSpan > 5 ? 2 : 1;
+  const xTicks = monthMarks.filter((_, i) => i % everyNth === 0).map(t => {
+    const dt = new Date(t);
+    const label = T(MONTH_ABBR_EN[dt.getUTCMonth()], MONTH_ABBR_ES[dt.getUTCMonth()]);
+    const xp = x(t).toFixed(1);
+    return `<line x1="${xp}" x2="${xp}" y1="${padT}" y2="${padT + plotH}" stroke="#eeeede" stroke-width="1"/>` +
+      `<text x="${xp}" y="${H - 4}" font-size="9" fill="#5f6350" text-anchor="middle">${esc(label)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="ndvi-svg" role="img" aria-label="${esc(T('Satellite greenness (NDVI) over time', 'Verdor satelital (NDVI) a lo largo del tiempo'))}">` +
+    `${yTicks}${xTicks}<path d="${d}" fill="none" stroke="#3f7d3f" stroke-width="1.5"/>${dots}` +
+    `<line x1="${padL}" x2="${padL}" y1="${padT}" y2="${padT + plotH}" stroke="#5f6350" stroke-width="1"/>` +
+    `<line x1="${padL}" x2="${W - padR}" y1="${padT + plotH}" y2="${padT + plotH}" stroke="#5f6350" stroke-width="1"/></svg>`;
 }
 function ndviBannerHtml() {
   if (ndviState.status === 'idle') {
@@ -686,8 +716,18 @@ function ndviBannerHtml() {
   const chart = ndviChartSvg(d && d.series);
   let seasonHtml = '';
   if (ph && ph.seasons && ph.seasons.length) {
-    seasonHtml = ph.seasons.map((s, i) => `<div class="hint fh"><b>${esc(T(`Season ${i + 1}`, `Temporada ${i + 1}`))}</b>: ${esc(T(`greening up around ${s.sos || '?'}, peak around ${s.peak_date || '?'}, senescence around ${s.eos || '?'}`, `verdeo alrededor de ${s.sos || '?'}, pico alrededor de ${s.peak_date || '?'}, senescencia alrededor de ${s.eos || '?'}`))} (${esc(s.confidence)})</div>` +
-      `<div class="chip-actions">${s.sos ? `<button type="button" class="ghost small" data-act="use-ndvi-date" data-field="plantDate" data-date="${esc(s.sos)}">${esc(T('Use as planting date', 'Usar como fecha de siembra'))}</button>` : ''}${s.eos ? `<button type="button" class="ghost small" data-act="use-ndvi-date" data-field="harvestDate" data-date="${esc(s.eos)}">${esc(T('Use as harvest date', 'Usar como fecha de cosecha'))}</button>` : ''}</div>`
+    // "Senescence" is the model's own vocabulary (phenology.js), not a grower's - plain language here
+    // is "starts drying down," the phrase growers actually use for a crop turning at the end of a
+    // season. The model cannot tell a cash crop's season from a cover crop's - both just look like
+    // green-up-to-dry-down to a satellite - so every season offers buttons for BOTH, and cover crop's
+    // two extra buttons only appear once the grower has already said yes to a cover crop; the grower
+    // is the one who knows which season on the chart was which crop.
+    const coverYes = document.getElementById('q-management-0-coverCrop')?.value === 'Yes';
+    const dateBtn = (field, date, en, es) => date ? `<button type="button" class="ghost small" data-act="use-ndvi-date" data-field="${esc(field)}" data-date="${esc(date)}">${esc(T(en, es))}</button>` : '';
+    seasonHtml = ph.seasons.map((s, i) => `<div class="hint fh"><b>${esc(T(`Season ${i + 1}`, `Temporada ${i + 1}`))}</b>: ${esc(T(`greening up around ${s.sos || '?'}, peak around ${s.peak_date || '?'}, starts drying down around ${s.eos || '?'}`, `verdeo alrededor de ${s.sos || '?'}, pico alrededor de ${s.peak_date || '?'}, empieza a secarse alrededor de ${s.eos || '?'}`))} (${esc(s.confidence)})</div>` +
+      `<div class="chip-actions">${dateBtn('plantDate', s.sos, 'Use as planting date', 'Usar como fecha de siembra')}${dateBtn('harvestDate', s.eos, 'Use as harvest date', 'Usar como fecha de cosecha')}` +
+      (coverYes ? `${dateBtn('coverPlantDate', s.sos, 'Use as cover crop planting date', 'Usar como fecha de siembra del cultivo de cobertura')}${dateBtn('coverEndDate', s.eos, 'Use as cover crop termination date', 'Usar como fecha de terminación del cultivo de cobertura')}` : '') +
+      `</div>`
     ).join('');
   } else if (ph) {
     seasonHtml = `<div class="hint fh">${esc(T('Not enough clear satellite looks to detect a season for this window.', 'No hay suficientes lecturas satelitales claras para detectar una temporada en esta ventana.'))}</div>`;
@@ -703,7 +743,22 @@ async function loadNdvi() {
   const plantVal = document.getElementById('q-management-0-plantDate')?.value;
   const harvestVal = document.getElementById('q-management-0-harvestDate')?.value;
   const params = new URLSearchParams({ring: ringParam});
-  if (plantVal) { params.set('start', plantVal); params.set('end', harvestVal || new Date().toISOString().slice(0, 10)); }
+  const today = new Date().toISOString().slice(0, 10);
+  if (plantVal) {
+    params.set('start', plantVal); params.set('end', harvestVal || today);
+  } else {
+    // No planting date yet - the whole point of this chart, for many growers, is to help find one.
+    // The server's own bare default (a fixed trailing window from TODAY) is wrong here: it has no
+    // idea which season the grower means, and a run in early autumn can cut off a green-up that
+    // actually started back in spring (reported live: green-up showed "?" because the window missed
+    // it). Anchor to the harvest year they already picked instead, using the same framing
+    // phenology.js's own detect() expects - roughly Oct of the prior year through Dec of the season
+    // year - so a full season is in view regardless of what today's date happens to be.
+    const yearEl = document.getElementById('q-cropsoil-0-assessYear');
+    const year = +(yearEl && yearEl.value) || new Date().getFullYear();
+    params.set('start', `${year - 1}-10-01`);
+    params.set('end', harvestVal || (year === new Date().getFullYear() ? today : `${year}-12-31`));
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 65000);
   try {
