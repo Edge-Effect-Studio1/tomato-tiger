@@ -4,7 +4,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const DEP = 'C:/Users/rverhofste/OneDrive - Adams Group, Inc/Desktop/Code/2_Analytics & Decks/Headwaters/deploy/adams-grower-survey/';
-const FILES = ['index.html', 'js/survey-1.js', 'js/survey-2.js', 'js/survey-3.js', 'admin/index.html', 'api/submit.js', 'api/submissions.js', 'api/suggest-field.js', 'api/ndvi.js', 'api/_lib/sentinel.js', 'api/_lib/phenology.js', 'vercel.json', 'package.json', '404.html', 'pwa.js'];
+const FILES = ['index.html', 'js/survey-1.js', 'js/survey-2.js', 'js/survey-3.js', 'admin/index.html', 'api/submit.js', 'api/submissions.js', 'api/suggest-field.js', 'api/ndvi.js', 'api/rain-check.js', 'api/_lib/sentinel.js', 'api/_lib/phenology.js', 'vercel.json', 'package.json', '404.html', 'pwa.js'];
 if (process.argv[2] === '--info') {
   for (const f of FILES) { const b = fs.readFileSync(DEP + f); console.log(crypto.createHash('sha1').update(b).digest('hex'), String(b.length).padStart(7), 'bytes', String(b.toString('utf8').length).padStart(7), 'chars', f); }
   process.exit(0);

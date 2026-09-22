@@ -57,7 +57,11 @@ function fieldBlockHtml(secId, uid, f) {
   // It stays in the DOM and in the tab order either way - just dimmed and disabled - so switching back
   // and forth never loses what was already typed, and screen readers still see it, just as unavailable.
   const dep = f.dependsOn ? ` data-dep-target="q-${secId}-${uid}-${f.dependsOn.field}" data-dep-show="${esc(f.dependsOn.show.join('|'))}" data-field-base="${base}"` : '';
-  return `<div class="field${f.full ? ' full' : ''}"${dep}><label${forAttr}>${bi(f.q, f.qEs)}</label>${chip}${fieldInputHtml(base, f)}${hint}</div>`;
+  // weatherCheck: a per-instance "check the real historical record" button (unlike f.chip, which
+  // assumes one instance per page - a repeatable section like Fertilizer needs the uid baked into
+  // the button itself, not a single shared slot every instance would collide on).
+  const weather = f.weatherCheck ? `<button type="button" class="ghost small" data-act="check-rain" data-uid="${esc(uid)}" data-secid="${esc(secId)}">${esc(T('Check historical weather', 'Consultar clima histórico'))}</button><div class="hint fh weather-result" id="weather-${base}"></div>` : '';
+  return `<div class="field${f.full ? ' full' : ''}"${dep}><label${forAttr}>${bi(f.q, f.qEs)}</label>${chip}${fieldInputHtml(base, f)}${weather}${hint}</div>`;
 }
 // Evaluates every data-dep-target field within `scope` (default: whole page) against its controlling
 // field's current value and toggles the dim/disable state. Re-run on any change, on instance add/remove,
@@ -696,6 +700,38 @@ document.addEventListener('click', e => {
   if (b) {
     const el = document.getElementById(`q-management-0-${b.dataset.field}`);
     if (el) { el.value = b.dataset.date; el.dispatchEvent(new Event('change', {bubbles: true})); scheduleDraftSave(); showToast(T('Filled in. Check it looks right.', 'Completado. Revise que esté bien.'), 3000); }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Real historical rain/irrigation check for the N-timing question above (rainNearApp) - operationalizes
+// it with an actual public weather record instead of asking the grower to remember. Opt-in per entry
+// (a button, not automatic) since it needs the application date filled in first and is a network call
+// the grower may not want on every keystroke. Suggests an answer; never writes it in without a tap.
+async function checkRain(secId, uid) {
+  const dateEl = document.getElementById(`q-${secId}-${uid}-appDate`);
+  const resultEl = document.getElementById(`weather-q-${secId}-${uid}-rainNearApp`);
+  if (!resultEl) return;
+  if (!dateEl || !dateEl.value) { resultEl.textContent = T('Enter the date of application above first.', 'Primero escriba la fecha de aplicación arriba.'); return; }
+  if (ring.length < 3) { resultEl.textContent = T('Draw the field boundary first.', 'Primero dibuje el perímetro del lote.'); return; }
+  const lat = ring.reduce((s, p) => s + p[1], 0) / ring.length, lon = ring.reduce((s, p) => s + p[0], 0) / ring.length;
+  resultEl.textContent = T('Checking the weather record…', 'Consultando el registro de clima…');
+  try {
+    const r = await fetch(`/api/rain-check?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&date=${dateEl.value}`);
+    const j = await r.json();
+    if (!j.ok || j.error || !j.suggested) { resultEl.textContent = T('Could not check the weather record right now.', 'No se pudo consultar el registro de clima ahora.'); return; }
+    const mm = Math.max(j.maxBeforeMm || 0, j.maxAfterMm || 0);
+    resultEl.innerHTML = `${esc(T(`Weather record suggests: ${j.suggested} (up to ${mm.toFixed(0)} mm in a day nearby).`, `El registro de clima sugiere: ${j.suggested} (hasta ${mm.toFixed(0)} mm en un día cercano).`))} ` +
+      `<button type="button" class="ghost small" data-act="use-rain" data-secid="${esc(secId)}" data-uid="${esc(uid)}" data-value="${esc(j.suggested)}">${esc(T('Use this', 'Usar esto'))}</button>`;
+  } catch { resultEl.textContent = T('Could not reach the weather archive right now.', 'No se pudo conectar con el archivo de clima ahora.'); }
+}
+document.addEventListener('click', e => {
+  const cb = e.target.closest('[data-act="check-rain"]');
+  if (cb) checkRain(cb.dataset.secid, cb.dataset.uid);
+  const ub = e.target.closest('[data-act="use-rain"]');
+  if (ub) {
+    const el = document.getElementById(`q-${ub.dataset.secid}-${ub.dataset.uid}-rainNearApp`);
+    if (el) { el.value = ub.dataset.value; scheduleDraftSave(); const card = el.closest('.card'); if (card) checkSectionCompletion(card); }
   }
 });
 document.addEventListener('input', e => {
