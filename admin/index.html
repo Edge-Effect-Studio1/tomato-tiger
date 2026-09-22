@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-NjibHcUFMgXwEwYFcswd2uzLDwqbYQ88MA0JAO4IulU='; style-src 'sha256-Aa6ZEfa9P4XbjELyGlJ3ocRfje2CYXHpqL34DvVbSLU='; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-+lSGu4Dm2RalXP2IddijB3tCqxmgYt47xocRduxyieE='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -70,6 +70,10 @@
   .entry{border-left:3px solid var(--line);padding-left:10px;margin:6px 0}
   .entry-n{font-size:11px;color:var(--olive);font-weight:700}
   .bsvg{width:260px;max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:var(--white);margin-top:6px}
+  .locator{position:relative;width:140px;height:140px;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:8px;background:var(--cream)}
+  .locator img{width:100%;height:100%;object-fit:cover;display:block}
+  .locator-dot{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#E8730C;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+  .locator-note{margin-top:4px}
   .notes{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px}
   .photos{display:flex;gap:8px;flex-wrap:wrap}
   .photos img{width:130px;height:130px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:zoom-in}
@@ -319,6 +323,32 @@ function centroid(pts) {
   const {minx, maxx, miny, maxy} = bounds(pts);
   return [(miny + maxy) / 2, (minx + maxx) / 2];
 }
+// Country/continental locator inset: a single low-zoom OpenStreetMap raster tile (standard slippy-map
+// tile math) with a marker dot placed at the exact fractional pixel position within that tile - gives
+// "where in the world is this" context next to the zoomed-in boundary outline above, without pulling a
+// full interactive map library into admin's tightly locked CSP (see the img-src allowance added for
+// this one host). Zoom 5 covers roughly a country-to-small-continent extent at most latitudes.
+const LOCATOR_ZOOM = 5;
+function locatorTile(lon, lat, z) {
+  const n = Math.pow(2, z);
+  const xf = (lon + 180) / 360 * n;
+  const latRad = lat * Math.PI / 180;
+  const yf = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+  const x = Math.max(0, Math.min(n - 1, Math.floor(xf))), y = Math.max(0, Math.min(n - 1, Math.floor(yf)));
+  return {x, y, px: (xf - x) * 256, py: (yf - y) * 256};
+}
+function locatorHtml(lat, lon) {
+  if (!isFinite(lat) || !isFinite(lon)) return '';
+  const t = locatorTile(lon, lat, LOCATOR_ZOOM);
+  // No inline style= here (admin's CSP has no 'unsafe-inline' for style-src) - the dot's position is
+  // set via data-px/data-py and placed by positionLocatorDots() after insertion, which uses the CSSOM
+  // (el.style.left = ...) rather than an HTML style attribute; CSP's style-src does not restrict that.
+  return `<div class="locator" aria-hidden="true">
+    <img src="https://tile.openstreetmap.org/${LOCATOR_ZOOM}/${t.x}/${t.y}.png" alt="" loading="lazy" width="256" height="256">
+    <span class="locator-dot" data-px="${t.px.toFixed(1)}" data-py="${t.py.toFixed(1)}"></span>
+  </div>
+  <p class="hint locator-note">${esc(T('Approximate location, from public OpenStreetMap tiles.', 'Ubicación aproximada, según mapas públicos de OpenStreetMap.'))}</p>`;
+}
 function photosHtml(photos) {
   const ok = validPhotos(photos);
   if (!ok.length) return '';
@@ -384,7 +414,7 @@ function renderDetail(sub) {
       (clat != null ? kv(T('Center', 'Centro'), `${clat.toFixed(5)}, ${clon.toFixed(5)}`) : '') +
       (clat != null ? `<div class="btnrow"><a class="btnlink" href="https://www.google.com/maps?q=${clat.toFixed(6)},${clon.toFixed(6)}&amp;t=k" target="_blank" rel="noopener noreferrer">${esc(T('Open in Google Maps', 'Abrir en Google Maps'))}</a>` +
         `<button class="ghost small" type="button" data-act="kml" data-sub="${id}">${esc(T('Download KML', 'Descargar KML'))}</button></div>` : '') +
-      boundarySvg(pts);
+      boundarySvg(pts) + (clat != null ? locatorHtml(clat, clon) : '');
   }
   const attachHtml = (list, title, titleEs, src) => {
     const items = Array.isArray(list) ? list : [];
@@ -405,9 +435,17 @@ function renderDetail(sub) {
 }
 
 // ---- actions ------------------------------------------------------------------------------------
+// Positions locator dots via the CSSOM (not an HTML style= attribute - see locatorHtml()'s comment).
+function positionLocatorDots(root) {
+  root.querySelectorAll('.locator-dot[data-px]').forEach(d => { d.style.left = d.dataset.px + 'px'; d.style.top = d.dataset.py + 'px'; });
+}
 function fillDetail(id) {
   const row = document.getElementById('detail-' + id);
-  if (row && loaded.has(id)) row.querySelector('.detail-body').innerHTML = renderDetail(loaded.get(id));
+  if (row && loaded.has(id)) {
+    const body = row.querySelector('.detail-body');
+    body.innerHTML = renderDetail(loaded.get(id));
+    positionLocatorDots(body);
+  }
 }
 async function toggleDetail(id, btn) {
   const row = document.getElementById('detail-' + id);
