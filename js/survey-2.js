@@ -129,6 +129,15 @@ async function runAutoFill() {
   const lon0 = ring.reduce((s, p) => s + p[0], 0) / ring.length;
   resyncLanduseAreas(); // the boundary changed: areas follow the percentages
   fetchSuggestions(lat0, lon0, samplePoints(8)); // has its own loading / error UI, so it is not awaited
+  // Same idea for the historical-weather check: if a fertilizer application date was already typed in
+  // before the boundary settled (checkRain needs both), it only just became possible - run it now
+  // instead of leaving the grower stuck on "Draw the field boundary first."
+  document.querySelectorAll('input[id$="-appDate"]').forEach(dateEl => {
+    const m = /^q-(\w+)-(\d+)-appDate$/.exec(dateEl.id);
+    if (!m || !dateEl.value) return;
+    const [, secId, uid] = m;
+    if (document.getElementById(`weather-q-${secId}-${uid}-rainNearApp`) && rainCheckedFor.get(`${secId}-${uid}`) !== dateEl.value) checkRain(secId, uid);
+  });
   const countryEl = document.getElementById('q-soilinfo-0-country');
   const countryFree = () => !countryEl.value.trim() || countryEl.value === autoFilledCountry;
   if (countryEl && countryFree()) {

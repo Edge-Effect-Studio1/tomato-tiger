@@ -657,7 +657,7 @@ document.addEventListener('change', e => { if (e.target.id === 'q-cropsoil-0-ass
 // small chart plus whatever the phenology model estimated for this season, both purely a starting
 // point for the planting/harvest dates above - never written in without a tap, same as every other
 // suggestion on this page.
-const ndviState = {status: 'idle', data: null};
+const ndviState = {status: 'idle', data: null, key: null};
 const MONTH_ABBR_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_ABBR_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 // A bare line with no axes reads as decoration, not information - a grower has no way to tell "this
@@ -730,7 +730,19 @@ function ndviBannerHtml() {
       `</div>`
     ).join('');
   } else if (ph) {
-    seasonHtml = `<div class="hint fh">${esc(T('Not enough clear satellite looks to detect a season for this window.', 'No hay suficientes lecturas satelitales claras para detectar una temporada en esta ventana.'))}</div>`;
+    // A bare "not enough data" line was unhelpful and, worse, unclear whether it meant something the
+    // grower could fix. phenology.js already computes exactly why (too few clear looks, or the field's
+    // own date range) - surface that instead of throwing it away, and give a farmer-facing reason for
+    // each case rather than the model's own internal one.
+    const n = ph.n_obs, first = ph.obs_first, last = ph.obs_last;
+    const range = (first && last) ? T(`(${first} to ${last})`, `(${first} a ${last})`) : '';
+    seasonHtml = ph.reason
+      ? `<div class="hint fh">${esc(T(
+          `Only found ${n} cloud-free satellite look${n === 1 ? '' : 's'} ${range} - not enough to find a green-up-to-harvest pattern. Common with a lot of cloud cover, or a short date range. Try widening the harvest year above, or check back after more clear days.`,
+          `Solo se encontraron ${n} lectura${n === 1 ? '' : 's'} satelital${n === 1 ? '' : 'es'} sin nubes ${range} - no alcanza para detectar un patrón de siembra a cosecha. Es común con mucha nubosidad, o un rango de fechas corto. Pruebe ampliar el año de cosecha arriba, o vuelva a intentar más adelante.`))}</div>`
+      : `<div class="hint fh">${esc(T(
+          `Found ${n} cloud-free looks ${range}, but no clear green-up-to-harvest pattern in that window. This is normal if the crop has not finished its cycle yet, or on ground that stays green year-round (pasture, alfalfa, orchard).`,
+          `Se encontraron ${n} lecturas sin nubes ${range}, pero ningún patrón claro de siembra a cosecha en esa ventana. Es normal si el cultivo todavía no terminó su ciclo, o en terreno que se mantiene verde todo el año (pastura, alfalfa, huerto).`))}</div>`;
   }
   return `<div class="chip done">${chipHead()}${chart}${seasonHtml}<div class="hint fh">${esc(T('Modeled from Sentinel-2 satellite data, not a field record - dates are week-scale estimates.', 'Modelado a partir de datos satelitales Sentinel-2, no un registro de campo - las fechas son estimaciones aproximadas.'))}</div></div>`;
 }
@@ -738,14 +750,13 @@ function renderNdviBanner() { const b = $('#ndvi-banner'); if (b) b.innerHTML = 
 langHooks.push(renderNdviBanner);
 async function loadNdvi() {
   if (ring.length < 3) { showToast(T('Draw the field boundary first.', 'Primero dibuje el perímetro del lote.')); return; }
-  ndviState.status = 'loading'; renderNdviBanner();
   const ringParam = [...ring, ring[0]].map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
   const plantVal = document.getElementById('q-management-0-plantDate')?.value;
   const harvestVal = document.getElementById('q-management-0-harvestDate')?.value;
-  const params = new URLSearchParams({ring: ringParam});
   const today = new Date().toISOString().slice(0, 10);
+  let start, end;
   if (plantVal) {
-    params.set('start', plantVal); params.set('end', harvestVal || today);
+    start = plantVal; end = harvestVal || today;
   } else {
     // No planting date yet - the whole point of this chart, for many growers, is to help find one.
     // The server's own bare default (a fixed trailing window from TODAY) is wrong here: it has no
@@ -756,16 +767,25 @@ async function loadNdvi() {
     // year - so a full season is in view regardless of what today's date happens to be.
     const yearEl = document.getElementById('q-cropsoil-0-assessYear');
     const year = +(yearEl && yearEl.value) || new Date().getFullYear();
-    params.set('start', `${year - 1}-10-01`);
-    params.set('end', harvestVal || (year === new Date().getFullYear() ? today : `${year}-12-31`));
+    start = `${year - 1}-10-01`;
+    end = harvestVal || (year === new Date().getFullYear() ? today : `${year}-12-31`);
   }
+  // Keyed on the exact boundary + date window, so a boundary edit that resolves to the same shape (or
+  // an unrelated re-render) is a no-op, and a fetch that is still in flight when the boundary moves
+  // AGAIN gets its result discarded instead of clobbering the newer one when it lands out of order.
+  const key = `${ringParam}|${start}|${end}`;
+  if (ndviState.key === key && ndviState.status !== 'error') return;
+  ndviState.key = key;
+  ndviState.status = 'loading'; renderNdviBanner();
+  const params = new URLSearchParams({ring: ringParam, start, end});
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 65000);
   try {
     const r = await fetch(`/api/ndvi?${params}`, {signal: ctrl.signal});
     const j = await r.json();
+    if (ndviState.key !== key) return; // the boundary or dates moved on again while this was loading
     if (!j.ok || j.error) ndviState.status = 'error'; else { ndviState.status = 'done'; ndviState.data = j; }
-  } catch { ndviState.status = 'error'; }
+  } catch { if (ndviState.key === key) ndviState.status = 'error'; }
   finally { clearTimeout(timer); renderNdviBanner(); }
 }
 document.addEventListener('click', e => {
@@ -779,15 +799,19 @@ document.addEventListener('click', e => {
 
 // ---------------------------------------------------------------------------------------------
 // Real historical rain/irrigation check for the N-timing question above (rainNearApp) - operationalizes
-// it with an actual public weather record instead of asking the grower to remember. Opt-in per entry
-// (a button, not automatic) since it needs the application date filled in first and is a network call
-// the grower may not want on every keystroke. Suggests an answer; never writes it in without a tap.
+// it with an actual public weather record instead of asking the grower to remember. Runs itself the
+// moment the application date is set (and again if the date is changed), so the grower never has to
+// know this feature exists to benefit from it; the button stays as a manual retry for when the
+// boundary wasn't drawn yet or the first call failed. Suggests an answer; never writes it in without
+// a tap on "Use this" - the auto-run only means the suggestion appears without being asked for.
+const rainCheckedFor = new Map(); // "secId-uid" -> date last checked, so a re-render doesn't re-fetch
 async function checkRain(secId, uid) {
   const dateEl = document.getElementById(`q-${secId}-${uid}-appDate`);
   const resultEl = document.getElementById(`weather-q-${secId}-${uid}-rainNearApp`);
   if (!resultEl) return;
   if (!dateEl || !dateEl.value) { resultEl.textContent = T('Enter the date of application above first.', 'Primero escriba la fecha de aplicación arriba.'); return; }
   if (ring.length < 3) { resultEl.textContent = T('Draw the field boundary first.', 'Primero dibuje el perímetro del lote.'); return; }
+  rainCheckedFor.set(`${secId}-${uid}`, dateEl.value);
   const lat = ring.reduce((s, p) => s + p[1], 0) / ring.length, lon = ring.reduce((s, p) => s + p[0], 0) / ring.length;
   resultEl.textContent = T('Checking the weather record…', 'Consultando el registro de clima…');
   try {
@@ -807,6 +831,13 @@ document.addEventListener('click', e => {
     const el = document.getElementById(`q-${ub.dataset.secid}-${ub.dataset.uid}-rainNearApp`);
     if (el) { el.value = ub.dataset.value; scheduleDraftSave(); const card = el.closest('.card'); if (card) checkSectionCompletion(card); }
   }
+});
+document.addEventListener('change', e => {
+  const m = /^q-(\w+)-(\d+)-appDate$/.exec(e.target.id || '');
+  if (!m) return;
+  const [, secId, uid] = m;
+  if (!document.getElementById(`weather-q-${secId}-${uid}-rainNearApp`)) return; // only sections with weatherCheck
+  if (e.target.value && rainCheckedFor.get(`${secId}-${uid}`) !== e.target.value) checkRain(secId, uid);
 });
 document.addEventListener('input', e => {
   const m = /^q-landchange-(\d+)-(pctAffected|areaAffected-amt|areaAffected-unit)$/.exec(e.target.id || '');
