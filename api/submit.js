@@ -15,8 +15,9 @@
  * length-capped, photos must be real image data URIs, and error responses never echo internals. A hidden
  * honeypot field silently discards form-filling bots. Vercel itself rejects bodies over 4.5 MB.
  *
- * EMAIL is dormant: it only runs when RESEND_API_KEY and EMAIL_FROM are set (NOTIFY_EMAIL adds a copy to
- * Adams). It never blocks or fails a submission, and never includes photos or coordinates.
+ * EMAIL is dormant: it only runs when a Resend key (RESEND_API_KEY or RESEND_KEY - either name works,
+ * see RESEND_KEY below) and EMAIL_FROM are set (NOTIFY_EMAIL adds a copy to Adams). It never blocks or
+ * fails a submission, and never includes photos or coordinates.
  */
 const { sql } = require('@vercel/postgres');
 
@@ -136,6 +137,10 @@ function sanitize(b) {
 }
 
 // ---- email (dormant until configured) -------------------------------------------------------------
+// Accepts either env var name for the Resend key - RESEND_API_KEY matches Resend's own docs/SDK
+// convention, but a var added by hand in the Vercel dashboard can easily end up named RESEND_KEY
+// instead (seen live 2026-09-22), and there is no upside to making that a silent dead end.
+const RESEND_KEY = process.env.RESEND_API_KEY || process.env.RESEND_KEY;
 const validEmail = e => typeof e === 'string' && e.length <= 200 && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/.test(e);
 const h = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -145,7 +150,7 @@ async function sendMail(payload) {
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: process.env.EMAIL_FROM, ...payload }),
       signal: ctrl.signal,
     });
@@ -189,7 +194,7 @@ function teamEmail(b, id) {
   return { subject: `New grower survey #${id}: ${b.farmName}`.replace(/[\r\n]+/g, ' ').slice(0, 200), text, html };
 }
 async function notify(b, id) {
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return; // dormant until configured
+  if (!RESEND_KEY || !process.env.EMAIL_FROM) return; // dormant until configured
   const jobs = [];
   const team = (process.env.NOTIFY_EMAIL || '').trim();
   if (validEmail(team)) jobs.push(sendMail({ to: [team], ...teamEmail(b, id) }));
