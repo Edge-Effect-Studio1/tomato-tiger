@@ -29,7 +29,11 @@ function fieldInputHtml(base, f) {
       return `<div class="compound"><input id="${base}-amt" type="number" step="any" inputmode="decimal">` +
         `<select id="${base}-unit" data-title-en="Unit" data-title-es="Unidad" title="${esc(T('Unit', 'Unidad'))}"><option value=""></option>${optionList(f.units)}</select></div>`;
     case 'percent':
-      return `<input id="${base}" type="number" step="any" min="0" max="100" inputmode="decimal" placeholder="%">`;
+      // The number input is the field of record (its id === base, same as every other kind, so
+      // collectAnswers/setFieldValue/loadBundle need no special case). The range is a purely visual
+      // second control kept in sync by the input listener below; it never carries an id anything reads.
+      return `<div class="pctwrap"><input id="${base}" type="number" step="any" min="0" max="100" inputmode="decimal" placeholder="%" class="pct-num">` +
+        `<input type="range" min="0" max="100" step="0.5" value="0" class="pct-slider" data-for="${base}" aria-hidden="true" tabindex="-1"></div>`;
     case 'number':
       // every 'number' field on this survey is a count, a pass, an age or a demand reading - none of
       // them are ever legitimately negative, so a plain floor at 0 catches typos and stray minus signs.
@@ -37,7 +41,7 @@ function fieldInputHtml(base, f) {
     case 'date':
       return `<input id="${base}" type="date">`;
     case 'tick':
-      return `<label class="tickfield"><input id="${base}" type="checkbox" aria-labelledby="lbl-${base}"> ${bi('Yes', 'Sí')}</label>`;
+      return `<label class="tickfield"><input id="${base}" type="checkbox" aria-labelledby="lbl-${base}"${f.autoMachine ? ' data-auto-machine' : ''}> ${bi('Yes', 'Sí')}</label>`;
     default:
       return `<input id="${base}" type="text"${phAttr}>`;
   }
@@ -73,6 +77,24 @@ function applyFieldDeps(scope) {
   });
 }
 document.addEventListener('change', () => applyFieldDeps());
+// Percent slider <-> number sync (see fieldInputHtml 'percent'). The slider is decorative only; the
+// number field stays the field of record so a value set programmatically (draft restore, a suggestion)
+// just needs to also nudge its slider, which syncPctSlider() below does from setFieldValue.
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.classList && t.classList.contains('pct-slider')) {
+    const n = document.getElementById(t.dataset.for);
+    if (n) n.value = t.value;
+  } else if (t.classList && t.classList.contains('pct-num')) {
+    const s = t.parentElement && t.parentElement.querySelector('.pct-slider');
+    if (s) s.value = t.value === '' ? 0 : Math.min(100, Math.max(0, +t.value || 0));
+  }
+});
+function syncPctSlider(el) {
+  if (!el || !el.classList.contains('pct-num')) return;
+  const s = el.parentElement && el.parentElement.querySelector('.pct-slider');
+  if (s) s.value = el.value === '' ? 0 : Math.min(100, Math.max(0, +el.value || 0));
+}
 const sectionCounters = {};
 function renderInstance(sec, uid) {
   const wrap = document.createElement('div');
@@ -177,7 +199,8 @@ $('#photo-input').onchange = async e => {
 };
 const payloadEstimate = () =>
   photos.reduce((s, p) => s + (p.dataUri ? p.dataUri.length : 0), 0) +
-  extraBoundaries.reduce((s, f) => s + (f.text || '').length + (f.dataUri || '').length, 0) + 60000;
+  extraBoundaries.reduce((s, f) => s + (f.text || '').length + (f.dataUri || '').length, 0) +
+  soilLabFiles.reduce((s, f) => s + (f.text || '').length + (f.dataUri || '').length, 0) + 60000;
 function renderPhotos() {
   const grid = $('#photo-grid');
   grid.innerHTML = '';
@@ -234,6 +257,40 @@ function renderExtraBoundaries() {
   });
 }
 langHooks.push(renderExtraBoundaries);
+
+// Soil sample lab results (PDF/CSV/photo of a report) - same pattern as additional boundaries just
+// above: images are compressed through the existing pipeline, CSV is kept as plain text, everything
+// else (PDF, .xls/.xlsx) is carried as a base64 data URI. Never parsed - Adams opens these by hand.
+const soilLabFiles = [];
+$('#soillab-input').onchange = async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  for (const file of files) {
+    const isImage = /^image\//.test(file.type) || /\.(jpe?g|png|heic|heif)$/i.test(file.name);
+    const isCsv = !isImage && (/\.csv$/i.test(file.name) || file.type === 'text/csv');
+    const cap = isImage ? 8 * 1024 * 1024 : (isCsv ? 400 * 1024 : 6 * 1024 * 1024); // PDFs/.xlsx: 6 MB
+    if (file.size > cap) { showToast(T(`"${file.name}" is too large and was skipped.`, `"${file.name}" es demasiado grande y se omitió.`), 6000); continue; }
+    try {
+      if (isImage) soilLabFiles.push({filename: file.name, dataUri: await compressFile(file)});
+      else if (isCsv) soilLabFiles.push({filename: file.name, text: await file.text()});
+      else soilLabFiles.push({filename: file.name, dataUri: await readAsDataUri(file)});
+    } catch { showToast(T(`Could not read "${file.name}".`, `No se pudo leer "${file.name}".`), 5000); }
+  }
+  renderSoilLabFiles();
+  scheduleDraftSave();
+};
+function renderSoilLabFiles() {
+  const list = $('#soillab-list');
+  if (!soilLabFiles.length) { list.textContent = ''; return; }
+  list.innerHTML = soilLabFiles.map((f, i) =>
+    `${esc(f.filename)} <button type="button" class="ghost" data-i="${i}" style="padding:2px 10px;font-size:12.5px;min-height:40px">&times; ${esc(T('Remove', 'Quitar'))}</button>`
+  ).join('<br>');
+  list.querySelectorAll('button[data-i]').forEach(btn => btn.onclick = () => {
+    soilLabFiles.splice(+btn.dataset.i, 1);
+    renderSoilLabFiles(); scheduleDraftSave();
+  });
+}
+langHooks.push(renderSoilLabFiles);
 
 // ---------------------------------------------------------------------------------------------
 // Suggestions. Once the boundary settles, /api/suggest-field proposes a soil type and any land-use
@@ -295,6 +352,7 @@ function landuseSync(uid, changed) {
     const a = parseFloat(amtEl.value);
     if (!Number.isFinite(a) || !unitEl.value) return;
     pctEl.value = (Math.round(Math.min(100, Math.max(0, unitToAcres(a, unitEl.value) / total * 100)) * 10) / 10).toString();
+    syncPctSlider(pctEl);
   }
 }
 // when the boundary changes, the areas follow the (unchanged) percentages
@@ -352,6 +410,52 @@ function useSoil() {
   renderSuggestions(); scheduleDraftSave();
 }
 const isEmptyInstance = inst => ![...inst.querySelectorAll('input,select')].some(el => el.type === 'checkbox' ? el.checked : el.value);
+
+// ---------------------------------------------------------------------------------------------
+// Machine-pass auto-populate. Fertilizing, spraying, tillage and planting almost always mean a
+// machine went over the field, but Machines and field passes is its own section the grower has to
+// remember to open separately. Rather than guess which exact machine (the lists don't map 1:1), a
+// matching answer elsewhere adds one blank line there automatically - once per trigger, and never if
+// a blank line is already waiting - so filling it in is the only step left, not remembering it exists.
+const machineAutoTriggers = new Set();
+function ensureMachinePass(triggerKey, en, es) {
+  if (machineAutoTriggers.has(triggerKey)) return;
+  machineAutoTriggers.add(triggerKey);
+  const sec = SECTIONS.find(s => s.id === 'machine');
+  const list = document.querySelector('#sec-machine .instances');
+  if (!sec || !list) return;
+  if ([...list.querySelectorAll('.instance')].some(isEmptyInstance)) return; // a blank line already awaits
+  const inst = renderInstance(sec, sectionCounters.machine++);
+  list.appendChild(inst);
+  applyFieldDeps(inst);
+  showToast(T(en, es), 4500);
+}
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches && t.matches('[data-auto-machine]') && t.checked) {
+    ensureMachinePass('tick:' + t.id,
+      'Added a line under Machines and field passes below - tell us which machine you used.',
+      'Agregamos una línea en Maquinaria y pasadas por el lote, más abajo - cuéntenos qué máquina usó.');
+  }
+  const tp = /^q-soilpractices-(\d+)-tillagePasses$/.exec(t.id || '');
+  if (tp && +t.value > 0) {
+    ensureMachinePass('tillage:' + tp[1],
+      'Tillage passes noted - added a line under Machines and field passes for the tillage equipment.',
+      'Anotamos las pasadas de labranza - agregamos una línea en Maquinaria y pasadas por el lote para el equipo.');
+  }
+  const pd = /^q-cropsoil-(\d+)-plantDate$/.exec(t.id || '');
+  if (pd && t.value) {
+    ensureMachinePass('plant:' + pd[1],
+      'Planting date noted - if you planted by machine, add it under Machines and field passes below.',
+      'Anotamos la fecha de siembra - si sembró con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.');
+  }
+  const hd = /^q-cropsoil-(\d+)-harvestDate$/.exec(t.id || '');
+  if (hd && t.value) {
+    ensureMachinePass('harvest:' + hd[1],
+      'Harvest date noted - if you harvested by machine, add it under Machines and field passes below.',
+      'Anotamos la fecha de cosecha - si cosechó con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.');
+  }
+});
 function addLanduse(i) {
   const lu = suggestState.data && suggestState.data.landuse;
   const s = lu && lu.suggestions && lu.suggestions[i];
@@ -500,6 +604,7 @@ function snapshotDraft() {
     answers: collectAnswers(),
     photos,
     additionalBoundaries: extraBoundaries,
+    soilLabFiles,
     autoSuggestions: autoSuggestionsForBundle(),
     hp: $('#q-hp').value,
   };
@@ -528,7 +633,7 @@ function scheduleDraftSave() {
     draft._auto = {area: autoFilledArea, country: autoFilledCountry};
     try {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); }
-      catch { draft.additionalBoundaries = []; localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } // big KML text can fill the quota
+      catch { draft.additionalBoundaries = []; draft.soilLabFiles = []; localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } // big KML text or a lab PDF can fill the quota
       draftSavedNow();
     } catch {
       draftStatus.set('bad', 'Could not save a backup on this device (storage full?). Submit soon while you have signal.',
@@ -564,7 +669,7 @@ function setFieldValue(secId, uid, f, val) {
     document.querySelectorAll('#' + base + ' input').forEach(i => { i.checked = want.has(i.value); });
   } else {
     const el = document.getElementById(base);
-    if (el != null && val != null) el.value = val;
+    if (el != null && val != null) { el.value = val; syncPctSlider(el); }
   }
 }
 function loadBundle(bundle) {
@@ -597,6 +702,9 @@ function loadBundle(bundle) {
   extraBoundaries.length = 0;
   if (Array.isArray(bundle.additionalBoundaries)) extraBoundaries.push(...bundle.additionalBoundaries);
   renderExtraBoundaries();
+  soilLabFiles.length = 0;
+  if (Array.isArray(bundle.soilLabFiles)) soilLabFiles.push(...bundle.soilLabFiles);
+  renderSoilLabFiles();
   photos.length = 0;
   if (Array.isArray(bundle.photos)) photos.push(...bundle.photos);
   renderPhotos();
@@ -758,9 +866,11 @@ function resetForNextField() {
   $('#q-fieldname').value = ''; $('#q-notes').value = '';
   photos.length = 0; renderPhotos();
   extraBoundaries.length = 0; renderExtraBoundaries();
+  soilLabFiles.length = 0; renderSoilLabFiles();
   for (const sec of SECTIONS) if (sec.enabled && sec.id !== 'farm') resetSection(sec);
   Object.assign(suggestState, {key: null, status: 'idle', data: null, fetchedAt: null, accepted: {soil: false, landuse: []}});
   renderSuggestions();
+  machineAutoTriggers.clear();
   clientId = uuid();
   autoFilledArea = null; autoFilledCountry = null;
 }

@@ -135,6 +135,11 @@ const TILLAGE_SYS = [['No-till','Siembra directa (sin labranza)'], ['Reduced til
 const COVER_YN = [['No cover crop','No sembré cultivo de cobertura'], ['Yes','Sí, sembré cultivo de cobertura']];
 const COVER_END = [['Rolled or crimped','Rolado o aplastado'], ['Mowed','Cortado con segadora'], ['Tilled in','Incorporado con labranza'], ['Herbicide','Con herbicida'], ['Grazed','Pastoreado por animales'], ['Killed by frost','Muerto por heladas'], ['Harvested for hay or silage','Cosechado para heno o ensilaje']];
 const NEUTRAL_PH = ['Type it in your own words', 'Escríbalo con sus propias palabras'];
+// The 12 USDA texture classes - what CFP, COMET-Farm and FieldScope all actually key soil behavior off,
+// more than the free-text "soil type" string. pH and organic matter are the other two most-requested.
+const SOIL_TEXTURE = [['Sand','Arena'], ['Loamy sand','Arena franca'], ['Sandy loam','Franco arenoso'], ['Loam','Franco'],
+  ['Silt loam','Franco limoso'], ['Silt','Limo'], ['Sandy clay loam','Franco arcilloso arenoso'], ['Clay loam','Franco arcilloso'],
+  ['Silty clay loam','Franco arcilloso limoso'], ['Sandy clay','Arcilloso arenoso'], ['Silty clay','Arcilloso limoso'], ['Clay','Arcilloso']];
 
 // field.kind: 'text' | 'number' | 'percent' | 'numberUnit' (needs `units`) | 'select' (needs `options`)
 // | 'date' | 'tick'. Optional per field: hint/hintEs (a plain line under the input), placeholder/phEs,
@@ -186,6 +191,12 @@ const SECTIONS = [
       hint: 'Fills in from your boundary. Correct it if it is wrong.', hintEs: 'Se completa a partir de su perímetro. Corríjalo si está mal.'},
     {id: 'soilType', q: 'Soil type', qEs: 'Tipo de suelo', kind: 'text', chip: 'soil', full: true, placeholder: 'e.g. clay loam', phEs: 'p. ej. franco arcilloso',
       hint: 'Once you draw the boundary we suggest one from public soil maps. Tap Use this soil, or type what you know about your soil.', hintEs: 'Cuando dibuje el perímetro le sugerimos uno según mapas públicos de suelo. Toque Usar este suelo, o escriba lo que usted sabe de su suelo.'},
+    {id: 'soilTexture', q: 'Soil texture (if you know it)', qEs: 'Textura del suelo (si la sabe)', kind: 'select', options: SOIL_TEXTURE,
+      hint: 'How much sand, silt and clay the soil has. A soil test can tell you, or pick your best guess from how it feels.', hintEs: 'Cuánta arena, limo y arcilla tiene el suelo. Un análisis se lo puede decir, o elija lo que mejor le parezca según cómo se siente.'},
+    {id: 'soilPH', q: 'Soil pH (if you know it)', qEs: 'pH del suelo (si lo sabe)', kind: 'number', placeholder: 'e.g. 6.5', phEs: 'p. ej. 6.5',
+      hint: 'From a soil test. A typical cropland range is about 5.5 to 7.5.', hintEs: 'De un análisis de suelo. Un rango típico en tierra de cultivo es de 5.5 a 7.5.'},
+    {id: 'soilOrganicMatter', q: 'Soil organic matter % (if you know it)', qEs: '% de materia orgánica del suelo (si lo sabe)', kind: 'percent',
+      hint: 'Also from a soil test. Skip these three if you have not had one done - or upload the lab report itself near the end of this survey.', hintEs: 'También de un análisis de suelo. Omita estas tres preguntas si no le hicieron uno, o suba el informe del laboratorio cerca del final de esta encuesta.'},
   ]},
   {id: 'fert', title: 'Fertilizer', titleEs: 'Fertilizante', enabled: true, repeatable: true, minItems: 1,
     itemLabel: 'Fertilizer application', itemLabelEs: 'Aplicación de fertilizante', addEs: 'Agregar otra aplicación de fertilizante',
@@ -209,6 +220,8 @@ const SECTIONS = [
     {id: 'appDate', q: 'Date of application', qEs: 'Fecha de aplicación', kind: 'date'},
     {id: 'inhibitor', q: 'Nitrification inhibitor', qEs: 'Inhibidor de nitrificación', kind: 'tick',
       hint: 'Only if you know you used a nitrification inhibitor (for example nitrapyrin or DMPP). Urease inhibitors such as NBPT do not count here. If you are unsure, leave it unticked.', hintEs: 'Solo si sabe que usó un inhibidor de nitrificación (por ejemplo nitrapirina o DMPP). Los inhibidores de la ureasa, como el NBPT, no cuentan aquí. Si tiene dudas, no lo marque.'},
+    {id: 'appliedByMachine', q: 'Applied by machine (spreader, applicator or fertigation rig)', qEs: 'Aplicado con máquina (esparcidora, aplicador o equipo de fertirriego)', kind: 'tick', autoMachine: true, full: true,
+      hint: 'If yes, we add a line under Machines and field passes below for you to name it.', hintEs: 'Si es así, agregamos una línea en Maquinaria y pasadas por el lote, más abajo, para que la nombre.'},
   ]},
   {id: 'irrigation', title: 'Irrigation', titleEs: 'Riego', enabled: true, repeatable: true, minItems: 1,
     itemLabel: 'Irrigation system', itemLabelEs: 'Sistema de riego', addEs: 'Agregar otro sistema de riego',
@@ -243,6 +256,8 @@ const SECTIONS = [
     {id: 'passes', q: 'Number of times applied', qEs: 'Cantidad de veces que se aplicó', kind: 'number'},
     {id: 'activeIngred', q: 'Active ingredient (% of the product), optional', qEs: 'Principio activo (% del producto), opcional', kind: 'percent', full: true,
       hint: 'The percentage is printed on the label. If the label gives grams per liter or lists several actives, leave this blank; the product name is enough.', hintEs: 'El porcentaje figura en la etiqueta. Si la etiqueta dice gramos por litro o lista varios principios activos, déjelo en blanco; con el nombre del producto alcanza.'},
+    {id: 'appliedByMachine', q: 'Applied by machine (sprayer)', qEs: 'Aplicado con máquina (pulverizadora)', kind: 'tick', autoMachine: true, full: true,
+      hint: 'If yes, we add a line under Machines and field passes below for you to name it.', hintEs: 'Si es así, agregamos una línea en Maquinaria y pasadas por el lote, más abajo, para que la nombre.'},
   ]},
   {id: 'machine', title: 'Machines and field passes', titleEs: 'Maquinaria y pasadas por el lote', enabled: true, repeatable: true, minItems: 0,
     itemLabel: 'Machine pass', itemLabelEs: 'Pasada de maquinaria', addEs: 'Agregar otra pasada de maquinaria',

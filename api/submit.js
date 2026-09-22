@@ -26,6 +26,7 @@ const MAX_TABLE_BYTES = 350 * 1024 * 1024;    // stop accepting before the 512 M
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
 const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const DATAURI_RE = /^data:[a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/;
 const TOP_STRINGS = { farmName: 200, fieldName: 200, contactName: 200, phone: 60, email: 200, buyer: 200, filledBy: 200, notes: 5000 };
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -109,8 +110,19 @@ function sanitize(b) {
   out.photos = (Array.isArray(b.photos) ? b.photos : []).slice(0, 12)
     .filter(p => isObj(p) && typeof p.dataUri === 'string' && p.dataUri.length <= 1500000 && PHOTO_RE.test(p.dataUri))
     .map(p => ({ filename: str(p.filename, 200), dataUri: p.dataUri }));
-  out.additionalBoundaries = (Array.isArray(b.additionalBoundaries) ? b.additionalBoundaries : []).slice(0, 20)
-    .filter(isObj).map(f => ({ filename: str(f.filename, 200), text: str(f.text, 500000) }));
+  // Text formats (KML/GeoJSON/GPX/JSON) arrive as .text; shapefiles, other zips and photos of a parcel
+  // map arrive as a base64 .dataUri instead - both must survive the whitelist rebuild, not just .text.
+  const cleanAttachments = (list, textMax) => (Array.isArray(list) ? list : []).slice(0, 20)
+    .filter(isObj).map(f => {
+      const filename = str(f.filename, 200);
+      if (typeof f.dataUri === 'string' && f.dataUri.length <= 6000000 && DATAURI_RE.test(f.dataUri)) {
+        return { filename, dataUri: f.dataUri };
+      }
+      return { filename, text: str(f.text, textMax) };
+    });
+  out.additionalBoundaries = cleanAttachments(b.additionalBoundaries, 500000);
+  // Soil lab reports (PDF/CSV/photo of a report) - same shape as additionalBoundaries: text or dataUri.
+  out.soilLabFiles = cleanAttachments(b.soilLabFiles, 500000);
   let auto = null;
   if (isObj(b.autoSuggestions)) { try { if (JSON.stringify(b.autoSuggestions).length <= 20000) auto = b.autoSuggestions; } catch {} }
   out.autoSuggestions = auto;

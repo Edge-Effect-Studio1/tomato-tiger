@@ -33,7 +33,7 @@
 
   BUNDLE (what Submit posts): kind 'headwaters-survey', version 2, clientId, lang, farmName, fieldName,
   contactName, phone, email, buyer, filledBy, notes, consent, noneApplied, boundary, answers, photos,
-  additionalBoundaries, autoSuggestions, hp (honeypot; must stay empty).
+  additionalBoundaries, soilLabFiles, autoSuggestions, hp (honeypot; must stay empty).
 -->
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="anonymous">
 <script src="/pwa.js" defer></script>
@@ -141,6 +141,9 @@
   .compound{display:flex;gap:6px}
   .compound input{flex:1.4;min-width:0}
   .compound select{flex:1;min-width:0}
+  .pctwrap{display:flex;gap:10px;align-items:center}
+  .pctwrap .pct-num{flex:0 0 68px;min-width:0}
+  .pctwrap .pct-slider{flex:1;min-width:0;accent-color:var(--green);height:44px;background:transparent}
   .tickfield{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:400;margin-bottom:0}
   .tickfield{min-height:44px}
   .tickfield input{width:22px;height:22px;min-height:0;flex:none;margin:0}
@@ -328,6 +331,13 @@
   </details>
 
   <div class="card">
+    <h2><span data-l="en">Soil sample results (optional)</span><span data-l="es">Resultados de análisis de suelo (opcional)</span></h2>
+    <p><span data-l="en">If you have had this field's soil tested, upload the lab report (PDF, CSV or a photo of it) here. This is the best way to give us exact pH, organic matter and texture, better than typing it in above.</span><span data-l="es">Si le hizo un análisis de suelo a este lote, suba el informe del laboratorio (PDF, CSV o una foto) aquí. Es la mejor forma de darnos el pH, la materia orgánica y la textura exactos, mejor que escribirlos arriba.</span></p>
+    <input type="file" id="soillab-input" accept=".pdf,.csv,.xls,.xlsx,image/*,application/pdf,text/csv,application/vnd.ms-excel" multiple aria-label="Soil sample results">
+    <div id="soillab-list" class="hint"></div>
+  </div>
+
+  <div class="card">
     <h2><span data-l="en">Photos</span><span data-l="es">Fotos</span></h2>
     <p><span data-l="en">Optional, but the more the better! We would love to see the crop, the soil, the residue, or you out in the field - a selfie is welcome too. Photos can show where your farm is, so we keep them private under the same promise as your location. You can add up to 10.</span><span data-l="es">Opcional, ¡pero cuantas más, mejor! Nos encantaría ver el cultivo, el suelo, el rastrojo, o a usted en el lote - una selfie también es bienvenida. Las fotos pueden mostrar dónde está su finca, así que las guardamos en privado, con la misma promesa que su ubicación. Puede agregar hasta 10.</span></p>
     <input type="file" id="photo-input" accept="image/*" multiple aria-label="Photos">
@@ -348,6 +358,7 @@
   </div>
 
   <div class="card consent" id="consent-card">
+    <p class="hint" style="margin-bottom:10px"><span data-l="en">To the best of my knowledge, the answers in this survey are accurate.</span><span data-l="es">Según mi leal saber y entender, las respuestas de esta encuesta son correctas.</span></p>
     <label class="tickfield"><input type="checkbox" id="q-consent">
       <span><span data-l="en">I agree that Adams Grain Company may store and use my answers to calculate farm-level environmental impact. My farm name and location will not be shared with anyone, including Adams' customers, without asking me first.</span><span data-l="es">Acepto que Adams Grain Company guarde y use mis respuestas para calcular el impacto ambiental a nivel de finca. El nombre y la ubicación de mi finca no se compartirán con nadie, incluidos los clientes de Adams, sin pedirme permiso primero.</span> <b style="color:var(--bad)">*</b></span></label>
     <p class="hint"><span data-l="en">When you tap Submit, your answers go to Adams. You can send another field afterward.</span><span data-l="es">Al tocar Enviar, sus respuestas llegan a Adams. Después puede enviar otro lote.</span></p>
