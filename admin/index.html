@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-D1ANBFBqKeisqZW/NPjvQ2k664whNicTrkCJW4LRMDE='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-3ecJx21UiQd7+T0wwJZt7HPNzE2/2Q2K8o+6Ei9yJRM='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -232,9 +232,10 @@ function rowHtml(r) {
     <td data-label="${esc(T('Crop', 'Cultivo'))}">${esc(r.crop)}</td>
     <td data-label="${esc(T('Acres', 'Acres'))}">${esc(r.acres)}</td>
     <td data-label="${esc(T('Photos / extra', 'Fotos / extras'))}">${photos} / ${extra}</td>
+    <td data-label="${esc(T('Deforestation', 'Deforestación'))}">${r.deforest_flag === 'possible_deforestation' ? `<span class="flag">${esc(T('REVIEW', 'REVISAR'))}</span>` : ''}</td>
     <td class="acts"><button class="ghost small" type="button" data-act="view">${esc(open ? T('Hide', 'Ocultar') : T('View', 'Ver'))}</button><button class="ghost small" type="button" data-act="json">${esc(T('Download JSON', 'Descargar JSON'))}</button><button class="ghost small danger" type="button" data-act="delete">${esc(T('Delete', 'Eliminar'))}</button></td>
   </tr>
-  <tr class="detail" id="detail-${id}"${open ? '' : ' hidden'}><td colspan="12"><div class="detail-body">${open && loaded.has(id) ? renderDetail(loaded.get(id)) : esc(T('Loading…', 'Cargando…'))}</div></td></tr>`;
+  <tr class="detail" id="detail-${id}"${open ? '' : ' hidden'}><td colspan="13"><div class="detail-body">${open && loaded.has(id) ? renderDetail(loaded.get(id)) : esc(T('Loading…', 'Cargando…'))}</div></td></tr>`;
 }
 function visibleRows() {
   const q = $('#find').value.trim().toLowerCase();
@@ -249,7 +250,7 @@ function renderList() {
       : `${allRows.length} of ${total} submission${total === 1 ? '' : 's'} loaded${q ? `, ${rows.length} match` : ''}, newest first (times in Pacific)`;
   } else $('#count').textContent = T('No submissions yet.', 'Todavía no hay envíos.');
   const th = [['#', '#'], ['Submitted', 'Enviado'], ['Grower / farm', 'Productor / finca'], ['Field', 'Campo'], ['Contact', 'Contacto'], ['Phone', 'Teléfono'],
-    ['Buyer', 'Comprador'], ['Country', 'País'], ['Crop', 'Cultivo'], ['Acres', 'Acres'], ['Photos / extra', 'Fotos / extras']];
+    ['Buyer', 'Comprador'], ['Country', 'País'], ['Crop', 'Cultivo'], ['Acres', 'Acres'], ['Photos / extra', 'Fotos / extras'], ['Deforestation', 'Deforestación']];
   $('#list').innerHTML = rows.length
     ? `<table class="tbl"><thead><tr>${th.map(h => `<th>${esc(T(h[0], h[1]))}</th>`).join('')}<th></th></tr></thead>
        <tbody>${rows.map(rowHtml).join('')}</tbody></table>`
@@ -570,8 +571,8 @@ const csvCell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.te
 function exportCsv() {
   const rows = visibleRows();
   if (!rows.length) { setMsg('Nothing to export yet.', 'Todavía no hay nada que exportar.', true); return; }
-  const head = ['id', 'submitted_pacific', 'farm', 'field', 'contact', 'phone', 'buyer', 'country', 'crop', 'acres', 'photos', 'extra_fields', 'survey_language'];
-  const lines = [head.join(',')].concat(rows.map(r => [r.id, fmtTime(r.submitted_at), r.farm_name, r.field_name, r.contact_name, r.phone, r.buyer, r.country, r.crop, r.acres, r.photo_count, r.extra_fields, r.lang].map(csvCell).join(',')));
+  const head = ['id', 'submitted_pacific', 'farm', 'field', 'contact', 'phone', 'buyer', 'country', 'crop', 'acres', 'photos', 'extra_fields', 'survey_language', 'deforestation_flag'];
+  const lines = [head.join(',')].concat(rows.map(r => [r.id, fmtTime(r.submitted_at), r.farm_name, r.field_name, r.contact_name, r.phone, r.buyer, r.country, r.crop, r.acres, r.photo_count, r.extra_fields, r.lang, r.deforest_flag || ''].map(csvCell).join(',')));
   download(`adams-grower-surveys_${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + lines.join('\r\n'), 'text/csv');
   setMsg(`Exported ${rows.length} row${rows.length === 1 ? '' : 's'}.`, `Se exportaron ${rows.length} fila${rows.length === 1 ? '' : 's'}.`);
 }

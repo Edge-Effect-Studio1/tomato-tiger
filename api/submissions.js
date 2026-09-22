@@ -109,7 +109,10 @@ module.exports = async (req, res) => {
         left(bundle->'answers'->'cropsoil'->>'crop', 60) AS crop,
         left(bundle->'boundary'->>'acres', 30) AS acres,
         CASE WHEN jsonb_typeof(bundle->'photos') = 'array' THEN jsonb_array_length(bundle->'photos') ELSE 0 END AS photo_count,
-        CASE WHEN jsonb_typeof(bundle->'additionalBoundaries') = 'array' THEN jsonb_array_length(bundle->'additionalBoundaries') ELSE 0 END AS extra_fields
+        CASE WHEN jsonb_typeof(bundle->'additionalBoundaries') = 'array' THEN jsonb_array_length(bundle->'additionalBoundaries') ELSE 0 END AS extra_fields,
+        -- Surfaced at list level (not just inside each submission's detail view) so a compliance scan
+        -- across every submission doesn't require opening each one - the whole reason to compute a flag.
+        left(bundle->'autoSuggestions'->'deforestation'->>'flag', 30) AS deforest_flag
       FROM survey_submissions
       WHERE id < ${cursor}
       ORDER BY id DESC
