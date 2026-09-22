@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-Mn9lSQyAlbehfUtzqH1Gk9U9PU1ueWXtBw7pwMtMX7k='; style-src 'sha256-KGpOPwdsA3pJooOi7slscPpxsqX5PA5EOehdkiCfVOM='; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-qloYKFoTMxJsOZgGvju4sYkMfPwaccJTlZ/0m9gn3Sc='; style-src 'sha256-Aa6ZEfa9P4XbjELyGlJ3ocRfje2CYXHpqL34DvVbSLU='; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -33,6 +33,7 @@
   button{cursor:pointer;font:inherit;border:0;border-radius:8px;padding:8px 14px;background:var(--green);
     color:var(--cream);font-weight:600;min-height:44px}
   button.ghost{background:transparent;color:var(--green);border:1px solid var(--green)}
+  button.ghost.danger{color:var(--bad);border-color:var(--bad)}
   button.small{min-height:36px;padding:4px 12px;font-size:13px}
   button:disabled{opacity:.5;cursor:default}
   input{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--white);
@@ -227,7 +228,7 @@ function rowHtml(r) {
     <td data-label="${esc(T('Crop', 'Cultivo'))}">${esc(r.crop)}</td>
     <td data-label="${esc(T('Acres', 'Acres'))}">${esc(r.acres)}</td>
     <td data-label="${esc(T('Photos / extra', 'Fotos / extras'))}">${photos} / ${extra}</td>
-    <td class="acts"><button class="ghost small" type="button" data-act="view">${esc(open ? T('Hide', 'Ocultar') : T('View', 'Ver'))}</button><button class="ghost small" type="button" data-act="json">${esc(T('Download JSON', 'Descargar JSON'))}</button></td>
+    <td class="acts"><button class="ghost small" type="button" data-act="view">${esc(open ? T('Hide', 'Ocultar') : T('View', 'Ver'))}</button><button class="ghost small" type="button" data-act="json">${esc(T('Download JSON', 'Descargar JSON'))}</button><button class="ghost small danger" type="button" data-act="delete">${esc(T('Delete', 'Eliminar'))}</button></td>
   </tr>
   <tr class="detail" id="detail-${id}"${open ? '' : ' hidden'}><td colspan="12"><div class="detail-body">${open && loaded.has(id) ? renderDetail(loaded.get(id)) : esc(T('Loading…', 'Cargando…'))}</div></td></tr>`;
 }
@@ -476,6 +477,33 @@ async function downloadKml(id) {
     download(`adams-grower-survey_${safeName(sub.farm_name)}_${id}.kml`, kml(sub.farm_name || 'Field boundary', pts), 'application/vnd.google-earth.kml+xml');
   } catch (err) { failMsg(err); }
 }
+// Delete is irreversible - a native confirm() dialog forces a deliberate second action (and cannot be
+// dismissed by a stray extra click the way a custom modal button could), naming the farm so a grower
+// is never deleted by id number alone. On success the row is spliced out of every in-memory list and
+// list, and the detail row is closed - a stale open panel could reference an id that no longer exists.
+async function deleteSub(id, btn) {
+  const row = allRows.find(r => Number(r.id) === id);
+  const label = row ? `#${id} (${row.farm_name || ''})` : `#${id}`;
+  const ok = confirm(T(
+    `Delete submission ${label}? This permanently removes it from the database and cannot be undone.`,
+    `¿Eliminar el envío ${label}? Esto lo borra de la base de datos de forma permanente y no se puede deshacer.`));
+  if (!ok) return;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/api/submissions?id=' + encodeURIComponent(id), {method: 'DELETE', headers: {Authorization: 'Bearer ' + pw}});
+    let j = null; try { j = await r.json(); } catch {}
+    if (!r.ok || !j || !j.ok) { const e = new Error((j && j.error) || ('HTTP ' + r.status)); e.code = r.status; throw e; }
+    allRows = allRows.filter(x => Number(x.id) !== id);
+    loaded.delete(id); openIds.delete(id);
+    total = Math.max(0, total - 1);
+    renderList();
+    setMsg(T(`Deleted submission #${id}.`, `Se eliminó el envío #${id}.`));
+  } catch (err) {
+    handleAuth(err);
+    const f = friendly(err);
+    setMsg('Could not delete. ' + f.en, 'No se pudo eliminar. ' + f.es, true);
+  } finally { if (btn) btn.disabled = false; }
+}
 // Spreadsheet formula injection: farm names etc. come from a public form, so a value starting with = + - @
 // would run as a formula when the CSV is opened in Excel or Sheets. A leading apostrophe defuses it.
 // (Column names stay in English in both languages: the CSV is data, and other tools read it.)
@@ -501,6 +529,7 @@ document.addEventListener('click', e => {
   const id = Number(tr.dataset.id);
   if (act === 'view') toggleDetail(id, btn);
   else if (act === 'json') downloadJson(id);
+  else if (act === 'delete') deleteSub(id, btn);
 });
 
 // ---- language -------------------------------------------------------------------------------------

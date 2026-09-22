@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
 
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'DELETE') {
     res.status(405).json({ ok: false, error: 'method not allowed' });
     return;
   }
@@ -39,6 +39,28 @@ module.exports = async (req, res) => {
   }
   if (auth !== 'ok') {
     res.status(401).json({ ok: false, error: 'wrong password' });
+    return;
+  }
+
+  // Delete one submission by id. Same password gate as every read above; irreversible, so the admin
+  // page requires an explicit confirm before ever sending this request - nothing here is a soft-delete.
+  if (req.method === 'DELETE') {
+    const id = parseId((req.query || {}).id);
+    if (id === null) {
+      res.status(400).json({ ok: false, error: 'bad id' });
+      return;
+    }
+    try {
+      const r = await sql`DELETE FROM survey_submissions WHERE id = ${id}`;
+      if (!r.rowCount) {
+        res.status(404).json({ ok: false, error: 'not found' });
+        return;
+      }
+      res.status(200).json({ ok: true, deleted: id });
+    } catch (err) {
+      console.error('submission delete failed:', err);
+      res.status(500).json({ ok: false, error: 'delete failed' });
+    }
     return;
   }
 
