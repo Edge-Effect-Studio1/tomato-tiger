@@ -129,7 +129,7 @@ async function runAutoFill() {
   const lon0 = ring.reduce((s, p) => s + p[0], 0) / ring.length;
   resyncLanduseAreas(); // the boundary changed: areas follow the percentages
   fetchSuggestions(lat0, lon0, samplePoints(8)); // has its own loading / error UI, so it is not awaited
-  const countryEl = document.getElementById('q-cropsoil-0-country');
+  const countryEl = document.getElementById('q-soilinfo-0-country');
   const countryFree = () => !countryEl.value.trim() || countryEl.value === autoFilledCountry;
   if (countryEl && countryFree()) {
     try {

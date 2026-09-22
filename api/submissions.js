@@ -103,7 +103,9 @@ module.exports = async (req, res) => {
         left(bundle->>'phone', 60) AS phone,
         left(bundle->>'buyer', 120) AS buyer,
         left(bundle->>'lang', 5) AS lang,
-        left(bundle->'answers'->'cropsoil'->>'country', 100) AS country,
+        -- 'country' moved from answers.cropsoil to answers.soilinfo in the 2026-09-22 section reorder;
+        -- COALESCE reads either shape so submissions from before and after that change both list correctly.
+        left(COALESCE(bundle->'answers'->'soilinfo'->>'country', bundle->'answers'->'cropsoil'->>'country'), 100) AS country,
         left(bundle->'answers'->'cropsoil'->>'crop', 60) AS crop,
         left(bundle->'boundary'->>'acres', 30) AS acres,
         CASE WHEN jsonb_typeof(bundle->'photos') = 'array' THEN jsonb_array_length(bundle->'photos') ELSE 0 END AS photo_count,

@@ -144,9 +144,19 @@ const SOIL_TEXTURE = [['Sand','Arena'], ['Loamy sand','Arena franca'], ['Sandy l
 // field.kind: 'text' | 'number' | 'percent' | 'numberUnit' (needs `units`) | 'select' (needs `options`)
 // | 'date' | 'tick'. Optional per field: hint/hintEs (a plain line under the input), placeholder/phEs,
 // chip:'soil' (suggestion slot above the input), full:true (spans both columns), notFound:true (a
-// FieldScope free-text gap; shows a neutral placeholder). Optional per section: why/whyEs (the "why we
-// ask / how to answer" line), group:'optional' (goes in the collapsed group), noneTick (a "none
-// applied" checkbox that hides the section), banner:'landuse' (the land-use suggestion slot).
+// FieldScope free-text gap; shows a neutral placeholder), autoMachine:true (a 'tick' that, when checked,
+// auto-adds a blank line under Machines and field passes - see ensureMachinePass() in 07_form.js).
+// Optional per section: why/whyEs (the "why we ask / how to answer" line), group:'optional' (goes in the
+// collapsed group), noneTick (a "none applied" checkbox that hides the section), banner:'landuse' (the
+// land-use suggestion slot).
+//
+// SECTION ORDER (2026-09-22 reorder): everything ordinary first (farm identity, crop basics, fertilizer,
+// irrigation, pesticides, seed) - then the planting/tillage/cover-crop cluster ("management") - then
+// Machines and field passes, which is deliberately positioned to come AFTER everything that can trigger
+// its auto-populate (fertilizer/pesticide "applied by machine" ticks, tillage passes, planting/harvest
+// dates - see ensureMachinePass()) - then the two sections that lean on a network round-trip once the
+// boundary settles (land-use change suggestions, then soil data) - then the collapsed "extras" group,
+// which renders after #sections regardless of array order (see 01_head.html / 07_form.js).
 const SECTIONS = [
   {id: 'farm', title: 'About your farm', titleEs: 'Sobre su finca', enabled: true, repeatable: false,
     why: 'A few facts about your farm so Adams can place it in our supply records and find programs that fit you.',
@@ -164,16 +174,14 @@ const SECTIONS = [
       hint: 'Adams would love to send you a thank-you. This is optional, and is not shared.', hintEs: 'A Adams le encantaría enviarle un agradecimiento. Esto es opcional y no se comparte.'},
   ]},
   {id: 'cropsoil', title: 'Crop & Soil', titleEs: 'Cultivo y suelo', enabled: true, repeatable: false,
-    why: 'What you grew in this field and what its soil is like. Adams uses this to work out yields and the carbon and nitrogen balance of the field. You do not need to look up climate or soil chemistry; Adams gets those from your boundary.',
-    whyEs: 'Lo que cultivó en este lote y cómo es su suelo. Adams lo usa para calcular rendimientos y el balance de carbono y nitrógeno del lote. No necesita buscar el clima ni la química del suelo; Adams los obtiene a partir de su perímetro.',
+    why: 'What you grew in this field and how much you harvested. Adams uses this to work out yields and the carbon and nitrogen balance of the field.',
+    whyEs: 'Lo que cultivó en este lote y cuánto cosechó. Adams lo usa para calcular rendimientos y el balance de carbono y nitrógeno del lote.',
     fields: [
     {id: 'assessYear', q: 'Which harvest are you describing?', qEs: '¿De qué cosecha nos va a hablar?', kind: 'select', options: YEARS_ASSESS, default: '2025', full: true,
       hint: 'Pick the year you harvested this crop. Example: soybeans cut in April 2026 are 2026. If this year\'s crop is not harvested yet, describe your last finished harvest.', hintEs: 'Elija el año en que cosechó este cultivo. Ejemplo: soja cosechada en abril de 2026 es 2026. Si todavía no cosechó este año, cuéntenos la última cosecha que terminó.'},
     {id: 'crop', q: 'Crop you are describing', qEs: 'Cultivo del que nos va a hablar', kind: 'select', options: CROPS},
     {id: 'cropOther', q: 'If other, which crop?', qEs: 'Si es otro, ¿cuál?', kind: 'text', dependsOn: {field: 'crop', show: ['Other']}},
     {id: 'variety', q: 'Variety or hybrid (if you know it)', qEs: 'Variedad o híbrido (si lo sabe)', kind: 'text'},
-    {id: 'plantDate', q: 'Planting date', qEs: 'Fecha de siembra', kind: 'date', hint: 'An approximate date is fine.', hintEs: 'Una fecha aproximada está bien.'},
-    {id: 'harvestDate', q: 'Harvest date', qEs: 'Fecha de cosecha', kind: 'date'},
     {id: 'previousCrop', q: 'Crop that was on this field just before (for example wheat, or fallow)', qEs: 'Cultivo que hubo en este lote justo antes (por ejemplo trigo, o barbecho)', kind: 'text', placeholder: 'e.g. wheat, or fallow', phEs: 'p. ej. trigo, o barbecho'},
     {id: 'growingArea', q: 'Growing area of this field', qEs: 'Superficie cultivada de este lote', kind: 'numberUnit', units: UNIT_AREA,
       hint: 'Fills in from your boundary. Change it if the planted area was smaller. This is this one field, not your whole farm.', hintEs: 'Se completa a partir de su perímetro. Cámbiela si la superficie sembrada fue menor. Es solo este lote, no toda su finca.'},
@@ -184,19 +192,6 @@ const SECTIONS = [
       // only a real question when residue actually stays on the field, in whatever form - incorporated
       // rice straw still has a mass; residue that was removed or burned does not.
       dependsOn: {field: 'residueMgmt', show: ['Left distributed on field, OR incorporated, OR mulched', 'Rice straw incorporation more than 30 days before cultivation', 'Rice straw incorporation less than 30 days before cultivation']}},
-    // country and soilType are filled in automatically once the boundary settles (a reverse-geocode call and
-    // the suggestion API respectively), both of which can take a few seconds. Placed last in this section so
-    // the lookups usually finish before the grower gets here, instead of greeting them with a blank/loading field.
-    {id: 'country', q: 'Country where the farm is located', qEs: 'País donde está la finca', kind: 'text', placeholder: 'e.g. Argentina', phEs: 'p. ej. Argentina',
-      hint: 'Fills in from your boundary. Correct it if it is wrong.', hintEs: 'Se completa a partir de su perímetro. Corríjalo si está mal.'},
-    {id: 'soilType', q: 'Soil type', qEs: 'Tipo de suelo', kind: 'text', chip: 'soil', full: true, placeholder: 'e.g. clay loam', phEs: 'p. ej. franco arcilloso',
-      hint: 'Once you draw the boundary we suggest one from public soil maps. Tap Use this soil, or type what you know about your soil.', hintEs: 'Cuando dibuje el perímetro le sugerimos uno según mapas públicos de suelo. Toque Usar este suelo, o escriba lo que usted sabe de su suelo.'},
-    {id: 'soilTexture', q: 'Soil texture (if you know it)', qEs: 'Textura del suelo (si la sabe)', kind: 'select', options: SOIL_TEXTURE,
-      hint: 'How much sand, silt and clay the soil has. A soil test can tell you, or pick your best guess from how it feels.', hintEs: 'Cuánta arena, limo y arcilla tiene el suelo. Un análisis se lo puede decir, o elija lo que mejor le parezca según cómo se siente.'},
-    {id: 'soilPH', q: 'Soil pH (if you know it)', qEs: 'pH del suelo (si lo sabe)', kind: 'number', placeholder: 'e.g. 6.5', phEs: 'p. ej. 6.5',
-      hint: 'From a soil test. A typical cropland range is about 5.5 to 7.5.', hintEs: 'De un análisis de suelo. Un rango típico en tierra de cultivo es de 5.5 a 7.5.'},
-    {id: 'soilOrganicMatter', q: 'Soil organic matter % (if you know it)', qEs: '% de materia orgánica del suelo (si lo sabe)', kind: 'percent',
-      hint: 'Also from a soil test. Skip these three if you have not had one done - or upload the lab report itself near the end of this survey.', hintEs: 'También de un análisis de suelo. Omita estas tres preguntas si no le hicieron uno, o suba el informe del laboratorio cerca del final de esta encuesta.'},
   ]},
   {id: 'fert', title: 'Fertilizer', titleEs: 'Fertilizante', enabled: true, repeatable: true, minItems: 1,
     itemLabel: 'Fertilizer application', itemLabelEs: 'Aplicación de fertilizante', addEs: 'Agregar otra aplicación de fertilizante',
@@ -259,21 +254,22 @@ const SECTIONS = [
     {id: 'appliedByMachine', q: 'Applied by machine (sprayer)', qEs: 'Aplicado con máquina (pulverizadora)', kind: 'tick', autoMachine: true, full: true,
       hint: 'If yes, we add a line under Machines and field passes below for you to name it.', hintEs: 'Si es así, agregamos una línea en Maquinaria y pasadas por el lote, más abajo, para que la nombre.'},
   ]},
-  {id: 'machine', title: 'Machines and field passes', titleEs: 'Maquinaria y pasadas por el lote', enabled: true, repeatable: true, minItems: 0,
-    itemLabel: 'Machine pass', itemLabelEs: 'Pasada de maquinaria', addEs: 'Agregar otra pasada de maquinaria',
-    why: 'Each time a tractor or machine went over the field (plowing, disking, planting, spraying, harvesting), add one entry. If you made the same pass three times, add it once and put 3 under Number of operations. Spraying counts here as the sprayer\'s trip; the products go under Pesticides. If a contractor did the work, pick the closest machine.',
-    whyEs: 'Cada vez que un tractor o una máquina pasó por el lote (arado, rastra, siembra, aplicación de plaguicidas, cosecha), agregue una pasada. Si hizo la misma pasada tres veces, agréguela una sola vez y escriba 3 en Cantidad de pasadas. La pulverización cuenta aquí como el viaje de la máquina; los productos van en Plaguicidas. Si lo hizo un contratista, elija la máquina más parecida.',
+  {id: 'seedplugs', title: 'Seed', titleEs: 'Semilla', enabled: true, repeatable: false,
+    why: 'Whether you planted seed or bought young plants (plugs). For soybean, safflower and sunflower, choose Seed.',
+    whyEs: 'Si sembró semilla o compró plantines (plugs). Para soja, cártamo y girasol, elija Semilla.',
     fields: [
-    {id: 'type', q: 'Machine type', qEs: 'Tipo de máquina', kind: 'select', options: MACHINES, full: true},
-    {id: 'fuel', q: 'Fuel type', qEs: 'Tipo de combustible', kind: 'select', options: FUEL_TYPES},
-    {id: 'ops', q: 'Number of operations', qEs: 'Cantidad de pasadas', kind: 'number',
-      hint: 'How many times this machine went over the field this season.', hintEs: 'Cuántas veces pasó esta máquina por el lote en la campaña.'},
-    {id: 'label', q: 'Label (optional)', qEs: 'Nombre para identificarla (opcional)', kind: 'text'},
+    {id: 'purchaseType', q: 'What you bought to plant this crop', qEs: 'Qué compró para sembrar este cultivo', kind: 'select', options: [['Plugs','Plantines o plántulas (plugs)'], ['Seed','Semilla']]},
+    {id: 'plugCount', q: 'Number of plugs bought', qEs: 'Cantidad de plantines comprados', kind: 'number', dependsOn: {field: 'purchaseType', show: ['Plugs']}},
+    {id: 'plugPeat', q: 'Plugs came in peat soil?', qEs: '¿Los plantines venían en turba?', kind: 'tick', dependsOn: {field: 'purchaseType', show: ['Plugs']}},
+    {id: 'seedMass', q: 'Amount of seed', qEs: 'Cantidad de semilla', kind: 'text', placeholder: 'amount + unit', phEs: 'cantidad + unidad', dependsOn: {field: 'purchaseType', show: ['Seed']}},
+    {id: 'seedSource', q: 'Seed source', qEs: 'Origen de la semilla', kind: 'select', options: [['Hybrid seed (from breeder)','Semilla híbrida (de la empresa semillera)'], ['Single variety','Variedad única (no híbrida)']], dependsOn: {field: 'purchaseType', show: ['Seed']}},
   ]},
-  {id: 'soilpractices', title: 'Soil practices', titleEs: 'Prácticas de suelo', enabled: true, repeatable: false,
-    why: 'There is no right answer here. Tell us what you actually did, including full tillage. It helps us see where soil-health support could be useful.',
-    whyEs: 'Aquí no hay respuestas correctas. Cuéntenos lo que realmente hizo, incluso si aró o rastreó. Nos ayuda a ver dónde podría servir el apoyo en salud del suelo.',
+  {id: 'management', title: 'Planting, tillage & cover crop', titleEs: 'Siembra, labranza y cultivo de cobertura', enabled: true, repeatable: false,
+    why: 'When you planted and harvested, how you worked the soil, and any cover crop. There is no right answer here - tell us what you actually did, including full tillage. It helps us see where soil-health support could be useful.',
+    whyEs: 'Cuándo sembró y cosechó, cómo trabajó el suelo, y cualquier cultivo de cobertura. Aquí no hay respuestas correctas - cuéntenos lo que realmente hizo, incluso si aró o rastreó. Nos ayuda a ver dónde podría servir el apoyo en salud del suelo.',
     fields: [
+    {id: 'plantDate', q: 'Planting date', qEs: 'Fecha de siembra', kind: 'date', hint: 'An approximate date is fine.', hintEs: 'Una fecha aproximada está bien.'},
+    {id: 'harvestDate', q: 'Harvest date', qEs: 'Fecha de cosecha', kind: 'date'},
     {id: 'tillage', q: 'Tillage system', qEs: 'Sistema de labranza', kind: 'select', options: TILLAGE_SYS, full: true},
     {id: 'tillagePasses', q: 'Tillage passes before planting', qEs: 'Pasadas de labranza antes de sembrar', kind: 'number',
       hint: 'Not counting planting or spraying. Enter 0 for no-till.', hintEs: 'Sin contar la siembra ni la pulverización. Escriba 0 si hizo siembra directa.'},
@@ -283,6 +279,17 @@ const SECTIONS = [
     {id: 'coverPlantDate', q: 'Cover crop planted', qEs: 'Fecha de siembra del cultivo de cobertura', kind: 'date', dependsOn: {field: 'coverCrop', show: ['Yes']}},
     {id: 'coverEndDate', q: 'Cover crop ended', qEs: 'Fecha en que terminó el cultivo de cobertura', kind: 'date', dependsOn: {field: 'coverCrop', show: ['Yes']}},
     {id: 'coverEndMethod', q: 'How the cover crop was ended', qEs: 'Cómo se terminó el cultivo de cobertura', kind: 'select', options: COVER_END, full: true, dependsOn: {field: 'coverCrop', show: ['Yes']}},
+  ]},
+  {id: 'machine', title: 'Machines and field passes', titleEs: 'Maquinaria y pasadas por el lote', enabled: true, repeatable: true, minItems: 0,
+    itemLabel: 'Machine pass', itemLabelEs: 'Pasada de maquinaria', addEs: 'Agregar otra pasada de maquinaria',
+    why: 'Each time a tractor or machine went over the field (plowing, disking, planting, spraying, harvesting), add one entry. If you made the same pass three times, add it once and put 3 under Number of operations. Spraying counts here as the sprayer\'s trip; the products go under Pesticides. If a contractor did the work, pick the closest machine. Ticking "Applied by machine" above, or filling in tillage passes or a planting/harvest date, already added a blank line below for you.',
+    whyEs: 'Cada vez que un tractor o una máquina pasó por el lote (arado, rastra, siembra, aplicación de plaguicidas, cosecha), agregue una pasada. Si hizo la misma pasada tres veces, agréguela una sola vez y escriba 3 en Cantidad de pasadas. La pulverización cuenta aquí como el viaje de la máquina; los productos van en Plaguicidas. Si lo hizo un contratista, elija la máquina más parecida. Si marcó «Aplicado con máquina» arriba, o completó las pasadas de labranza o una fecha de siembra/cosecha, ya le agregamos una línea en blanco abajo.',
+    fields: [
+    {id: 'type', q: 'Machine type', qEs: 'Tipo de máquina', kind: 'select', options: MACHINES, full: true},
+    {id: 'fuel', q: 'Fuel type', qEs: 'Tipo de combustible', kind: 'select', options: FUEL_TYPES},
+    {id: 'ops', q: 'Number of operations', qEs: 'Cantidad de pasadas', kind: 'number',
+      hint: 'How many times this machine went over the field this season.', hintEs: 'Cuántas veces pasó esta máquina por el lote en la campaña.'},
+    {id: 'label', q: 'Label (optional)', qEs: 'Nombre para identificarla (opcional)', kind: 'text'},
   ]},
   {id: 'landchange', title: 'Land use change', titleEs: 'Cambio de uso del suelo', enabled: true, repeatable: true, minItems: 0, banner: 'landuse',
     itemLabel: 'Land use change', itemLabelEs: 'Cambio de uso del suelo', addEs: 'Agregar otro cambio de uso del suelo',
@@ -301,15 +308,20 @@ const SECTIONS = [
     {id: 'areaAffected', q: 'Area the change applies to', qEs: 'Superficie a la que aplica el cambio', kind: 'numberUnit', units: UNIT_AREA,
       hint: 'Calculated from the percentage and your field outline. If you change the area instead, the percentage updates.', hintEs: 'Se calcula con el porcentaje y el perímetro de su lote. Si cambia la superficie, se actualiza el porcentaje.'},
   ]},
-  {id: 'seedplugs', title: 'Seed', titleEs: 'Semilla', enabled: true, repeatable: false,
-    why: 'Whether you planted seed or bought young plants (plugs). For soybean, safflower and sunflower, choose Seed.',
-    whyEs: 'Si sembró semilla o compró plantines (plugs). Para soja, cártamo y girasol, elija Semilla.',
+  {id: 'soilinfo', title: 'Soil data', titleEs: 'Datos del suelo', enabled: true, repeatable: false,
+    why: 'These fill in from your field boundary once it settles - reverse-geocoding your country and looking up a soil type from public maps, both of which can take a few seconds. Check them and correct anything that is wrong.',
+    whyEs: 'Estos datos se completan a partir del perímetro de su lote una vez que se fija - buscamos su país y un tipo de suelo en mapas públicos, lo que puede tardar unos segundos. Revíselos y corrija lo que esté mal.',
     fields: [
-    {id: 'purchaseType', q: 'What you bought to plant this crop', qEs: 'Qué compró para sembrar este cultivo', kind: 'select', options: [['Plugs','Plantines o plántulas (plugs)'], ['Seed','Semilla']]},
-    {id: 'plugCount', q: 'Number of plugs bought', qEs: 'Cantidad de plantines comprados', kind: 'number', dependsOn: {field: 'purchaseType', show: ['Plugs']}},
-    {id: 'plugPeat', q: 'Plugs came in peat soil?', qEs: '¿Los plantines venían en turba?', kind: 'tick', dependsOn: {field: 'purchaseType', show: ['Plugs']}},
-    {id: 'seedMass', q: 'Amount of seed', qEs: 'Cantidad de semilla', kind: 'text', placeholder: 'amount + unit', phEs: 'cantidad + unidad', dependsOn: {field: 'purchaseType', show: ['Seed']}},
-    {id: 'seedSource', q: 'Seed source', qEs: 'Origen de la semilla', kind: 'select', options: [['Hybrid seed (from breeder)','Semilla híbrida (de la empresa semillera)'], ['Single variety','Variedad única (no híbrida)']], dependsOn: {field: 'purchaseType', show: ['Seed']}},
+    {id: 'country', q: 'Country where the farm is located', qEs: 'País donde está la finca', kind: 'text', placeholder: 'e.g. Argentina', phEs: 'p. ej. Argentina',
+      hint: 'Fills in from your boundary. Correct it if it is wrong.', hintEs: 'Se completa a partir de su perímetro. Corríjalo si está mal.'},
+    {id: 'soilType', q: 'Soil type', qEs: 'Tipo de suelo', kind: 'text', chip: 'soil', full: true, placeholder: 'e.g. clay loam', phEs: 'p. ej. franco arcilloso',
+      hint: 'Once you draw the boundary we suggest one from public soil maps. Tap Use this soil, or type what you know about your soil.', hintEs: 'Cuando dibuje el perímetro le sugerimos uno según mapas públicos de suelo. Toque Usar este suelo, o escriba lo que usted sabe de su suelo.'},
+    {id: 'soilTexture', q: 'Soil texture (if you know it)', qEs: 'Textura del suelo (si la sabe)', kind: 'select', options: SOIL_TEXTURE,
+      hint: 'How much sand, silt and clay the soil has. A soil test can tell you, or pick your best guess from how it feels.', hintEs: 'Cuánta arena, limo y arcilla tiene el suelo. Un análisis se lo puede decir, o elija lo que mejor le parezca según cómo se siente.'},
+    {id: 'soilPH', q: 'Soil pH (if you know it)', qEs: 'pH del suelo (si lo sabe)', kind: 'number', placeholder: 'e.g. 6.5', phEs: 'p. ej. 6.5',
+      hint: 'From a soil test. A typical cropland range is about 5.5 to 7.5.', hintEs: 'De un análisis de suelo. Un rango típico en tierra de cultivo es de 5.5 a 7.5.'},
+    {id: 'soilOrganicMatter', q: 'Soil organic matter % (if you know it)', qEs: '% de materia orgánica del suelo (si lo sabe)', kind: 'percent',
+      hint: 'Also from a soil test. Skip these three if you have not had one done - or upload the lab report itself near the end of this survey.', hintEs: 'También de un análisis de suelo. Omita estas tres preguntas si no le hicieron uno, o suba el informe del laboratorio cerca del final de esta encuesta.'},
   ]},
 
   // ---- the collapsed "Only if this applies to you" group ----

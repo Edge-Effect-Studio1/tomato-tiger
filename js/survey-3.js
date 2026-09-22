@@ -403,7 +403,7 @@ function renderSuggestions() {
 langHooks.push(renderSuggestions);
 function useSoil() {
   const soil = suggestState.data && suggestState.data.soil;
-  const el = document.getElementById('q-cropsoil-0-soilType');
+  const el = document.getElementById('q-soilinfo-0-soilType');
   if (!soil || !soil.value || !el) return;
   el.value = soil.value; // always the English wording, so Adams' data stays consistent
   suggestState.accepted.soil = true;
@@ -437,19 +437,19 @@ document.addEventListener('change', e => {
       'Added a line under Machines and field passes below - tell us which machine you used.',
       'Agregamos una línea en Maquinaria y pasadas por el lote, más abajo - cuéntenos qué máquina usó.');
   }
-  const tp = /^q-soilpractices-(\d+)-tillagePasses$/.exec(t.id || '');
+  const tp = /^q-management-(\d+)-tillagePasses$/.exec(t.id || '');
   if (tp && +t.value > 0) {
     ensureMachinePass('tillage:' + tp[1],
       'Tillage passes noted - added a line under Machines and field passes for the tillage equipment.',
       'Anotamos las pasadas de labranza - agregamos una línea en Maquinaria y pasadas por el lote para el equipo.');
   }
-  const pd = /^q-cropsoil-(\d+)-plantDate$/.exec(t.id || '');
+  const pd = /^q-management-(\d+)-plantDate$/.exec(t.id || '');
   if (pd && t.value) {
     ensureMachinePass('plant:' + pd[1],
       'Planting date noted - if you planted by machine, add it under Machines and field passes below.',
       'Anotamos la fecha de siembra - si sembró con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.');
   }
-  const hd = /^q-cropsoil-(\d+)-harvestDate$/.exec(t.id || '');
+  const hd = /^q-management-(\d+)-harvestDate$/.exec(t.id || '');
   if (hd && t.value) {
     ensureMachinePass('harvest:' + hd[1],
       'Harvest date noted - if you harvested by machine, add it under Machines and field passes below.',
@@ -883,6 +883,31 @@ $('#another-field').onclick = () => {
   showToast(T('Ready for another field. Your farm and contact details were kept.', 'Listo para otro lote. Se conservaron los datos de su finca y de contacto.'), 5000);
 };
 $('#finish').onclick = () => { $('#finish-note').hidden = false; };
+
+// ---------------------------------------------------------------------------------------------
+// Clear survey / logout. Unlike "Submit another field" (which deliberately keeps farm and contact
+// details), this is a full wipe for someone who typed junk, wants to hand the device to the next
+// grower, or just wants a clean start - it also re-locks the access gate, since a shared or public
+// device left unlocked is the more likely reason to reach for this than a private one.
+function clearSurveyAndLogout() {
+  const ok = confirm(T(
+    'Clear everything you have entered and start over? This cannot be undone, and takes you back to the access screen.',
+    '¿Borrar todo lo que escribió y empezar de nuevo? Esto no se puede deshacer, y lo regresa a la pantalla de acceso.'));
+  if (!ok) return;
+  clearDraft();
+  resetForNextField(); // boundary, photos, extra files, every section except farm, suggestions, clientId
+  const farmSec = SECTIONS.find(s => s.id === 'farm');
+  if (farmSec) resetSection(farmSec); // resetForNextField deliberately spares this one; a full clear does not
+  $('#q-farmname').value = ''; $('#q-fieldname').value = ''; $('#q-contactname').value = '';
+  $('#q-phone').value = ''; $('#q-email').value = ''; $('#q-buyer').value = ''; $('#q-filledby').value = '';
+  $('#q-notes').value = ''; $('#q-consent').checked = false; $('#consent-card').classList.remove('flag');
+  $('#done').hidden = true; $('#formwrap').hidden = false; $('#savebar').style.display = '';
+  try { sessionStorage.removeItem('fieldscope-unlocked'); } catch {}
+  $('#gate-err').style.display = 'none'; $('#gate-pw').value = '';
+  $('#gate').style.display = 'flex';
+  window.scrollTo(0, 0);
+}
+$('#clear-survey').onclick = clearSurveyAndLogout;
 
 if (SUBMIT_URL) {
   submitBtn.hidden = false;
