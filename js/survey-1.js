@@ -8,6 +8,7 @@
 // request", which an Apps Script receiver would also need; harmless for the Vercel one.
 const SUBMIT_URL = '/api/submit';
 const SUGGEST_URL = '/api/suggest-field';
+const LOOKUP_URL = '/api/lookup-field';
 const MAX_PHOTOS = 10;
 const MAX_BODY_BYTES = 4.2 * 1024 * 1024; // Vercel rejects request bodies over 4.5 MB
 const CONSENT_VERSION = '2026-09-v1';

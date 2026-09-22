@@ -1114,6 +1114,38 @@ try {
 } catch {}
 
 // ---------------------------------------------------------------------------------------------
+// Resume by field code: a grower who started a field earlier (this device or a different one) can
+// load it back in by the short code shown on their thank-you screen. Loads the same shape a local
+// draft does (loadBundle handles both), fetched from Postgres instead of localStorage. Never loads
+// silently - only when the grower actively enters a code and taps Load, unlike the draft restore
+// above, since this can overwrite whatever the grower currently has on screen.
+$('#code-resume-go').onclick = async () => {
+  const input = $('#code-resume-input');
+  const msg = $('#code-resume-msg');
+  const code = (input.value || '').trim().toUpperCase();
+  if (!/^[2-9A-HJ-NP-Z]{6}$/i.test(code)) { msg.textContent = T('That doesn\'t look like a 6-character code.', 'Eso no parece un código de 6 caracteres.'); return; }
+  msg.textContent = T('Loading…', 'Cargando…');
+  try {
+    const r = await fetch(`${LOOKUP_URL}?code=${encodeURIComponent(code)}`);
+    const j = await r.json();
+    if (!j.ok) {
+      msg.textContent = j.error === 'not found'
+        ? T('No field found with that code. Check it and try again.', 'No se encontró ningún lote con ese código. Revíselo e intente de nuevo.')
+        : T('Could not load that code right now. Try again in a moment.', 'No se pudo cargar ese código ahora. Intente de nuevo en un momento.');
+      return;
+    }
+    loadBundle(j.bundle);
+    input.value = '';
+    msg.textContent = '';
+    $('#code-resume').open = false;
+    showToast(T('Loaded. Check everything looks right, then update and submit as usual.', 'Cargado. Revise que todo esté bien, y luego actualice y envíe como de costumbre.'), 6000);
+    window.scrollTo(0, 0);
+  } catch {
+    msg.textContent = T('Could not reach the server. Check your connection and try again.', 'No se pudo conectar con el servidor. Revise su conexión e intente de nuevo.');
+  }
+};
+
+// ---------------------------------------------------------------------------------------------
 // Submit. Validates the hard requirements (farm name, boundary, consent), makes sure the body fits under
 // Vercel's 4.5 MB request cap (shrinking photos if it does not), then POSTs the bundle as a CORS
 // simple request. On failure the grower is told their answers are already safe on this device (the
@@ -1179,10 +1211,10 @@ async function submitSurvey() {
       return;
     }
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    let id = null;
-    try { const j = await r.json(); id = j && j.id; } catch {}
+    let id = null, fieldCode = null;
+    try { const j = await r.json(); id = j && j.id; fieldCode = j && j.fieldCode; } catch {}
     if (id === 0) throw new Error('not saved'); // the server's silent bot-discard answer: a real person must not see "thank you"
-    showDone(id, bundle);
+    showDone(id, bundle, fieldCode);
   } catch {
     saveStatus.set('bad', 'Could not submit (no connection?). Nothing was lost: your answers are saved on this device. Keep this page open and tap Submit again once you have signal. (Photos are not saved on this device.)',
       'No se pudo enviar (¿sin conexión?). No se perdió nada: sus respuestas están guardadas en este dispositivo. Deje esta página abierta y toque Enviar de nuevo cuando tenga señal. (Las fotos no se guardan en este dispositivo.)');
@@ -1202,11 +1234,13 @@ function renderDone() {
   $('#done-line').textContent = T(`Adams Grain Company has received your survey for ${what}.`, `Adams Grain Company recibió su encuesta para ${what}.`);
   $('#done-ref').textContent = lastDone.id ? '#' + lastDone.id : '';
   $('#done-refwrap').hidden = !lastDone.id;
+  $('#done-code').textContent = lastDone.fieldCode || '';
+  $('#done-codewrap').hidden = !lastDone.fieldCode;
 }
 langHooks.push(renderDone);
-function showDone(id, bundle) {
+function showDone(id, bundle, fieldCode) {
   clearDraft();
-  lastDone = {id, farm: bundle.farmName, field: bundle.fieldName, bundle};
+  lastDone = {id, farm: bundle.farmName, field: bundle.fieldName, bundle, fieldCode};
   saveStatus.clear();
   $('#formwrap').hidden = true;
   $('#savebar').style.display = 'none';

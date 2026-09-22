@@ -297,6 +297,14 @@
     <p class="hint"><span data-l="en">We can also do this over a call - email or text me and we can go through it together.</span><span data-l="es">También podemos hacerlo por llamada. Escríbame o mándeme un mensaje y lo revisamos juntos.</span></p>
     <a class="btn-link ghost" href="https://wa.me/15153265118?text=Hi%20Robbe%2C%20I%27d%20like%20help%20completing%20the%20Adams%20Grain%20grower%20survey%20for%20my%20field." target="_blank" rel="noopener" data-l="en">💬 Questions? Message us on WhatsApp</a>
     <a class="btn-link ghost" href="https://wa.me/15153265118?text=Hola%20Robbe%2C%20quisiera%20ayuda%20para%20completar%20la%20encuesta%20de%20productores%20de%20Adams%20Grain%20para%20mi%20lote." target="_blank" rel="noopener" data-l="es">💬 ¿Preguntas? Escríbanos por WhatsApp</a>
+    <details id="code-resume">
+      <summary><span data-l="en">Already started a field? Load it with your code</span><span data-l="es">¿Ya empezó un lote? Cárguelo con su código</span></summary>
+      <div class="row" style="margin-top:8px">
+        <input id="code-resume-input" maxlength="6" data-ph-en="Your 6-character code" data-ph-es="Su código de 6 caracteres" placeholder="Your 6-character code" autocomplete="off" style="text-transform:uppercase;max-width:220px">
+        <button type="button" id="code-resume-go" class="ghost"><span data-l="en">Load</span><span data-l="es">Cargar</span></button>
+      </div>
+      <p class="hint" id="code-resume-msg"></p>
+    </details>
   </div>
 
   <div class="card">
@@ -407,6 +415,8 @@
   <p id="done-line"></p>
   <div id="done-refwrap"><div><span data-l="en">Your reference number</span><span data-l="es">Su número de referencia</span></div>
   <div class="refno" id="done-ref"></div></div>
+  <div id="done-codewrap" hidden><div><span data-l="en">Your field code - save this to load this field again later, on this device or any other</span><span data-l="es">Su código de lote - guárdelo para cargar este lote de nuevo más adelante, en este dispositivo o en cualquier otro</span></div>
+  <div class="refno" id="done-code"></div></div>
   <p class="hint"><span data-l="en">Keep this number in case you need to contact us about this survey (rverhofste@adamsgrp.com).</span><span data-l="es">Guarde este número por si necesita comunicarse con nosotros sobre esta encuesta (rverhofste@adamsgrp.com).</span></p>
   <div class="row">
     <button id="view-report" class="ghost"><span data-l="en">View field report</span><span data-l="es">Ver informe del lote</span></button>
