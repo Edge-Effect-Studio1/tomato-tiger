@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-3ecJx21UiQd7+T0wwJZt7HPNzE2/2Q2K8o+6Ei9yJRM='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-U+OTRdcI83n2dmx2ahsOT0rWuXBvZPicjNilott0YA8='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -424,6 +424,11 @@ function renderDetail(sub) {
     : (b.version === 1 ? `<span class="muted">${esc(T('Earlier survey version, no consent box', 'Versión anterior de la encuesta, sin casilla de consentimiento'))}</span>` : `<span class="flag">${esc(T('not recorded', 'sin registro'))}</span>`));
   add(T('Submitted', 'Enviado'), esc(fmtTime(sub.submitted_at)));
   add(T('Reference', 'Referencia'), '#' + id + (b.clientId ? ` <span class="muted">(${esc(clip(b.clientId, 8))})</span>` : ''));
+  // The code the grower's own thank-you screen showed once, to resume/duplicate this field later - not
+  // saved anywhere on their end beyond that one screen, so this is the only recovery path if they lose
+  // it. Kept out of the list table and the CSV export on purpose: it is a semi-private key into that
+  // grower's own data, not something that belongs in a bulk-exportable file that could end up shared.
+  add(T('Field code', 'Código del lote'), sub.field_code ? `<strong>${esc(sub.field_code)}</strong>` : `<span class="muted">${esc(T('none (submitted before this feature)', 'ninguno (enviado antes de esta función)'))}</span>`);
   const bd = b.boundary && typeof b.boundary === 'object' ? b.boundary : null;
   const pts = bd ? cleanRing(bd.ring) : [];
   let bdHtml = `<p class="muted">${esc(T('No boundary.', 'Sin límite.'))}</p>`;

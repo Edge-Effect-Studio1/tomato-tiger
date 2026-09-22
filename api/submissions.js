@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
       }
       // farm_name is truncated: the full name is already inside the bundle, and repeating a huge value
       // here could push a legitimately accepted submission over the response size cap.
-      const one = await sql`SELECT id, left(farm_name, 200) AS farm_name, submitted_at, bundle FROM survey_submissions WHERE id = ${id}`;
+      const one = await sql`SELECT id, left(farm_name, 200) AS farm_name, submitted_at, bundle, field_code FROM survey_submissions WHERE id = ${id}`;
       if (!one.rows.length) {
         res.status(404).json({ ok: false, error: 'not found' });
         return;
