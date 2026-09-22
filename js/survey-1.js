@@ -287,7 +287,7 @@ const SECTIONS = [
     whyEs: 'Cada vez que un tractor o una máquina pasó por el lote (arado, rastra, siembra, aplicación de plaguicidas, cosecha), agregue una pasada. Si hizo la misma pasada tres veces, agréguela una sola vez y escriba 3 en Cantidad de pasadas. La pulverización cuenta aquí como el viaje de la máquina; los productos van en Plaguicidas. Si lo hizo un contratista, elija la máquina más parecida. Si marcó «Aplicado con máquina» arriba, o completó las pasadas de labranza o una fecha de siembra/cosecha, ya le agregamos una línea en blanco abajo.',
     fields: [
     {id: 'type', q: 'Machine type', qEs: 'Tipo de máquina', kind: 'select', options: MACHINES, full: true},
-    {id: 'fuel', q: 'Fuel type', qEs: 'Tipo de combustible', kind: 'select', options: FUEL_TYPES},
+    {id: 'fuel', q: 'Fuel type', qEs: 'Tipo de combustible', kind: 'select', options: FUEL_TYPES, default: 'diesel (average biofuel blend)'},
     {id: 'ops', q: 'Number of operations', qEs: 'Cantidad de pasadas', kind: 'number',
       hint: 'How many times this machine went over the field this season.', hintEs: 'Cuántas veces pasó esta máquina por el lote en la campaña.'},
     {id: 'label', q: 'Label (optional)', qEs: 'Nombre para identificarla (opcional)', kind: 'text'},

@@ -265,15 +265,23 @@ function textureClass(clay, sand, silt) {
 async function soilGlobal(lat, lon) {
   // SoilGrids is the slow, sometimes flaky source (5-30 s). Two independent requests run together; once
   // either one has a real answer the other gets a short grace period, then whatever has arrived is used.
+  // HARD CAP at SOILGRIDS_DEADLINE_MS: with a 16 s/14 s per-attempt timeout and one retry each, the
+  // worst case for either source alone is ~32 s / ~29 s - close enough to the outer 38 s deadline
+  // (suggest()'s DEADLINE_MS) that a genuinely slow day for ISRIC's service could blow the whole
+  // response and return nothing, even for a worldwide point with no other soil source to fall back to
+  // (reported live 2026-09-22: "we could not find soil data for this spot" for a real, ordinary
+  // location). Capping the wait means soilGlobal() always returns in time with whatever partial data
+  // (c and/or p) it managed to get, instead of occasionally returning nothing at all.
+  const SOILGRIDS_DEADLINE_MS = 30000;
   const cls = retry(() => getJson(`${SOILGRIDS}/classification/query?lon=${lon}&lat=${lat}&number_classes=3`, {}, 16000), 2, 600).catch(() => null);
   const props = retry(() => getJson(`${SOILGRIDS}/properties/query?lon=${lon}&lat=${lat}&property=phh2o&property=soc&property=clay&property=sand&property=silt&depth=0-5cm&value=mean`, {}, 14000), 2, 600).catch(() => null);
   let c = null, p = null;
   const gotC = cls.then(v => { c = v; return v; }), gotP = props.then(v => { p = v; return v; });
   const never = new Promise(() => {}); // a failed source must not start the grace period
-  await Promise.race([
+  await within(Promise.race([
     Promise.all([gotC, gotP]),
     Promise.race([gotC.then(v => (v ? v : never)), gotP.then(v => (v ? v : never))]).then(() => sleep(8000)),
-  ]);
+  ]), SOILGRIDS_DEADLINE_MS, null);
   const name = c && c.wrb_class_name;
   const layers = (p && p.properties && p.properties.layers) || [];
   const val = n => {

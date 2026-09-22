@@ -490,7 +490,12 @@ document.addEventListener('change', e => {
 // matching answer elsewhere adds one blank line there automatically - once per trigger, and never if
 // a blank line is already waiting - so filling it in is the only step left, not remembering it exists.
 const machineAutoTriggers = new Set();
-function ensureMachinePass(triggerKey, en, es) {
+// `guess`: {type, label} - a starting point, never a lock-in. `type` must be one of MACHINES' own
+// English values or it silently fails to select (a plain <select> ignores an unmatched value), which
+// is the safe failure mode if a guess ever drifts out of sync with the option list. `label` names
+// where the line came from ("Fertilizer 1", "Tillage", ...) so an auto-added blank card reads as
+// something, not just "Machine pass N" - both are pre-fills the grower can freely overwrite.
+function ensureMachinePass(triggerKey, en, es, guess) {
   if (machineAutoTriggers.has(triggerKey)) return;
   machineAutoTriggers.add(triggerKey);
   const sec = SECTIONS.find(s => s.id === 'machine');
@@ -500,6 +505,11 @@ function ensureMachinePass(triggerKey, en, es) {
   const inst = renderInstance(sec, sectionCounters.machine++);
   list.appendChild(inst);
   applyFieldDeps(inst);
+  if (guess) {
+    const uid = inst.dataset.uid;
+    if (guess.type) setFieldValue('machine', uid, {id: 'type', kind: 'select'}, guess.type);
+    if (guess.label) setFieldValue('machine', uid, {id: 'label', kind: 'text'}, guess.label);
+  }
   showToast(T(en, es), 5500);
   // A toast alone can be missed if the grower is looking at a field far from Machines and field passes
   // (this was reported as "I checked the box and nothing happened," even though the line WAS added -
@@ -512,30 +522,53 @@ function ensureMachinePass(triggerKey, en, es) {
   if (card) card.classList.add('auto-added-flash');
   setTimeout(() => { inst.classList.remove('auto-added'); if (card) card.classList.remove('auto-added-flash'); }, 6000);
 }
+// The grower sees instances numbered 1, 2, 3... by a CSS counter tied to DOM order (not by uid), so
+// a trigger inside instance uid X has to find its own on-screen position to build a label like
+// "Fertilizer 1" that actually matches what the grower is looking at.
+function instancePosition(sectionId, uid) {
+  const insts = [...document.querySelectorAll(`#sec-${sectionId} .instance`)];
+  const i = insts.findIndex(el => el.dataset.uid === uid);
+  return i === -1 ? null : i + 1;
+}
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.matches && t.matches('[data-auto-machine]') && t.checked) {
+    const fm = /^q-fert-(\d+)-appliedByMachine$/.exec(t.id);
+    const pm = !fm && /^q-pesticide-(\d+)-appliedByMachine$/.exec(t.id);
+    let guess = null;
+    if (fm) {
+      const pos = instancePosition('fert', fm[1]);
+      const method = document.getElementById(`q-fert-${fm[1]}-method`)?.value || '';
+      guess = {type: method === 'Foliar spray' ? 'fertiliser spraying' : 'fertiliser spreading', label: pos ? `Fertilizer ${pos}` : null};
+    } else if (pm) {
+      const pos = instancePosition('pesticide', pm[1]);
+      const ptype = document.getElementById(`q-pesticide-${pm[1]}-type`)?.value || '';
+      guess = {type: ptype === 'Herbicide' ? 'herbicide spraying' : 'biocide spraying', label: pos ? `Pesticide ${pos}` : null};
+    }
     ensureMachinePass('tick:' + t.id,
       'Added a line under Machines and field passes below - tell us which machine you used.',
-      'Agregamos una línea en Maquinaria y pasadas por el lote, más abajo - cuéntenos qué máquina usó.');
+      'Agregamos una línea en Maquinaria y pasadas por el lote, más abajo - cuéntenos qué máquina usó.', guess);
   }
   const tp = /^q-management-(\d+)-tillagePasses$/.exec(t.id || '');
   if (tp && +t.value > 0) {
     ensureMachinePass('tillage:' + tp[1],
       'Tillage passes noted - added a line under Machines and field passes for the tillage equipment.',
-      'Anotamos las pasadas de labranza - agregamos una línea en Maquinaria y pasadas por el lote para el equipo.');
+      'Anotamos las pasadas de labranza - agregamos una línea en Maquinaria y pasadas por el lote para el equipo.',
+      {type: 'disc harrow', label: T('Tillage', 'Labranza')});
   }
   const pd = /^q-management-(\d+)-plantDate$/.exec(t.id || '');
   if (pd && t.value) {
     ensureMachinePass('plant:' + pd[1],
       'Planting date noted - if you planted by machine, add it under Machines and field passes below.',
-      'Anotamos la fecha de siembra - si sembró con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.');
+      'Anotamos la fecha de siembra - si sembró con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.',
+      {type: 'row crop planter', label: T('Planting', 'Siembra')});
   }
   const hd = /^q-management-(\d+)-harvestDate$/.exec(t.id || '');
   if (hd && t.value) {
     ensureMachinePass('harvest:' + hd[1],
       'Harvest date noted - if you harvested by machine, add it under Machines and field passes below.',
-      'Anotamos la fecha de cosecha - si cosechó con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.');
+      'Anotamos la fecha de cosecha - si cosechó con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.',
+      {type: 'combine', label: T('Harvest', 'Cosecha')});
   }
 });
 function addLanduse(i) {
