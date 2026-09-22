@@ -29,6 +29,12 @@ const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 const DATAURI_RE = /^data:[a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/;
 const TOP_STRINGS = { farmName: 200, fieldName: 200, contactName: 200, phone: 60, email: 200, buyer: 200, filledBy: 200, notes: 5000 };
 
+const FIELD_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'; // no 0/O, 1/I/L - the pairs that get misread aloud or mistyped
+function genFieldCode() {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += FIELD_CODE_ALPHABET[Math.floor(Math.random() * FIELD_CODE_ALPHABET.length)];
+  return s;
+}
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const okKey = k => KEY_RE.test(k) && !BAD_KEYS.has(k);
@@ -241,13 +247,17 @@ module.exports = async (req, res) => {
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       bundle JSONB NOT NULL
     )`;
+    // Self-healing schema addition, not a migration step: the table already exists in production with
+    // real rows, so a plain CREATE TABLE IF NOT EXISTS above would never add this column to it.
+    await sql`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS field_code TEXT`;
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS survey_submissions_field_code_idx ON survey_submissions(field_code) WHERE field_code IS NOT NULL`;
     // Idempotent retry: if the response to a successful save was lost, the grower taps Submit again with the same
     // clientId. Answer with the row that already exists instead of creating a duplicate.
     if (bundle.clientId) {
-      const dup = await sql`SELECT id FROM survey_submissions WHERE bundle->>'clientId' = ${bundle.clientId}
+      const dup = await sql`SELECT id, field_code FROM survey_submissions WHERE bundle->>'clientId' = ${bundle.clientId}
         AND submitted_at > now() - interval '1 day' ORDER BY id DESC LIMIT 1`;
       if (dup.rows.length) {
-        res.status(200).json({ ok: true, id: dup.rows[0].id, duplicate: true });
+        res.status(200).json({ ok: true, id: dup.rows[0].id, fieldCode: dup.rows[0].field_code, duplicate: true });
         return;
       }
     }
@@ -261,14 +271,30 @@ module.exports = async (req, res) => {
       res.status(429).json({ ok: false, error: 'busy' });
       return;
     }
-    const result = await sql`
-      INSERT INTO survey_submissions (farm_name, bundle)
-      VALUES (${bundle.farmName.slice(0, 200)}, ${json}::jsonb)
-      RETURNING id
-    `;
-    const id = result.rows[0].id;
-    try { await notify(bundle, id); } catch (err) { console.error('notify failed:', err && err.name); }
-    res.status(200).json({ ok: true, id });
+    // A short code a grower can read back over the phone or type on another device, distinct from the
+    // numeric #id (sequential, so it would leak how many submissions exist). Excludes 0/O/1/I/L - the
+    // pairs that get misread out loud or mistyped. 6 chars over a 32-char alphabet is ~1e9 combinations;
+    // the retry loop below only matters if two submissions land on the exact same code, astronomically
+    // unlikely at this app's actual volume, but cheap to guard against with the unique index above.
+    const id = await (async () => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const fieldCode = genFieldCode();
+        try {
+          const result = await sql`
+            INSERT INTO survey_submissions (farm_name, bundle, field_code)
+            VALUES (${bundle.farmName.slice(0, 200)}, ${json}::jsonb, ${fieldCode})
+            RETURNING id
+          `;
+          return { id: result.rows[0].id, fieldCode };
+        } catch (err) {
+          if (!/duplicate key.*field_code/i.test(String(err && err.message))) throw err;
+          // collision on fieldCode specifically - try again with a fresh one
+        }
+      }
+      throw new Error('could not generate a unique field code after 5 attempts');
+    })();
+    try { await notify(bundle, id.id); } catch (err) { console.error('notify failed:', err && err.name); }
+    res.status(200).json({ ok: true, id: id.id, fieldCode: id.fieldCode });
   } catch (err) {
     // Detail goes to the function log only; the caller just learns the save failed.
     console.error('submit failed:', err);
