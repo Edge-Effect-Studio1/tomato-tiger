@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-uzxZKTSc9ifZu2ZJIXreifdxvDN0O3Rgu5n1+Mrk4us='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-D1ANBFBqKeisqZW/NPjvQ2k664whNicTrkCJW4LRMDE='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -381,7 +381,19 @@ function suggestionsHtml(a) {
     ).join('<br>') : `<br>${esc(T('No season detected in this window.', 'No se detectó ninguna temporada en esta ventana.'))}`;
     out += '</div>';
   }
-  if (!a.soil && !lu && !nd) out += `<p class="muted">${esc(T('No suggestions were available for this location.', 'No había sugerencias disponibles para este lugar.'))}</p>`;
+  const df = a.deforestation;
+  if (df) {
+    const FLAG_LABEL = {
+      not_forest_2020: ['Not forested at cutoff', 'Sin bosque en la fecha de referencia'],
+      still_forested: ['Forested at cutoff, still forested', 'Con bosque en la fecha de referencia, sigue con bosque'],
+      possible_deforestation: ['POSSIBLE DEFORESTATION SINCE CUTOFF', 'POSIBLE DEFORESTACIÓN DESDE LA FECHA DE REFERENCIA'],
+      unknown: ['Forested at cutoff, current status unknown', 'Con bosque en la fecha de referencia, estado actual desconocido'],
+    }[df.flag] || [df.flag, df.flag];
+    const share = df.shareOfField != null ? ` (~${Math.round(df.shareOfField * 100)}% ${esc(T('of field', 'del lote'))}, ${esc(String(df.samples))} ${esc(T('samples', 'muestras'))})` : '';
+    out += `<div class="sug"><b>${esc(T('Deforestation-free check', 'Verificación de libre de deforestación'))}</b> (${esc(df.source)}, ${esc(T('reference date', 'fecha de referencia'))} ${esc(String(df.cutoffYear))}-12-31): ` +
+      `${esc(T(FLAG_LABEL[0], FLAG_LABEL[1]))}${df.flag === 'possible_deforestation' ? `<span class="flag">${esc(T('REVIEW', 'REVISAR'))}</span>` : ''}${share}</div>`;
+  }
+  if (!a.soil && !lu && !nd && !df) out += `<p class="muted">${esc(T('No suggestions were available for this location.', 'No había sugerencias disponibles para este lugar.'))}</p>`;
   return out;
 }
 function kml(name, pts) {

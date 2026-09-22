@@ -861,12 +861,18 @@ function autoSuggestionsForBundle() {
     seasons: (ndviState.data.phenology && ndviState.data.phenology.seasons || []).map(s => ({sos: s.sos, peak_date: s.peak_date, eos: s.eos, confidence: s.confidence})),
   } : null;
   if (!d && !ndvi) return null;
-  const soil = (d && d.soil) || {}, lu = (d && d.landuse) || {};
+  const soil = (d && d.soil) || {}, lu = (d && d.landuse) || {}, df = (d && d.deforestation) || {};
   return {
     fetchedAt: suggestState.fetchedAt, lat: d && d.lat, lon: d && d.lon,
     soil: soil.available ? {source: soil.source, value: soil.value, confidence: soil.confidence, detail: soil.detail || null} : null,
     landuse: lu.available ? {source: lu.source, currentState: lu.currentState, cropHistory: lu.cropHistory || null,
       suggestions: (lu.suggestions || []).map(s => ({yearChange: s.yearChange, landFrom: s.landFrom, landTo: s.landTo, confidence: s.confidence, basis: s.basis, shareOfField: s.shareOfField == null ? null : s.shareOfField, samples: s.samples == null ? null : s.samples}))} : null,
+    // Not a grower-facing question - a derived compliance flag (EUDR/SBTi FLAG reference date
+    // 2020-12-31) recorded for Adams' own records regardless of what the grower answers elsewhere.
+    // See summarizeDeforestation() in api/suggest-field.js for what each flag value means.
+    deforestation: df.available ? {source: df.source, cutoffYear: df.cutoffYear, forestAtCutoff: df.forestAtCutoff,
+      stillForest: df.stillForest == null ? null : df.stillForest, checkedThrough: df.checkedThrough || null,
+      flag: df.flag, shareOfField: df.shareOfField == null ? null : df.shareOfField, samples: df.samples == null ? null : df.samples} : null,
     ndvi,
     accepted: suggestState.accepted,
   };

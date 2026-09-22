@@ -54,6 +54,7 @@ async function mapLimit(items, limit, fn) {
 }
 const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 const DEADLINE_MS = 38000;
+const DEFOREST_DEADLINE_MS = 12000; // two point queries against one reliable source - should be fast; a low cap keeps a slow run from being the reason the whole response is late
 const within = (p, ms, fallback) => Promise.race([p, sleep(ms).then(() => fallback)]);
 
 // ---- vocabulary -------------------------------------------------------------------------------
@@ -478,6 +479,80 @@ async function landuseSatellite(lat, lon, samples) {
   };
 }
 
+// ---- deforestation-free flag (EUDR / SBTi FLAG reference date: 2020-12-31) -----------------------
+// A dedicated check, separate from the land-use-change suggestions above: those help a grower recall
+// and describe a change; this answers a narrower compliance question Adams needs regardless of what
+// the grower fills in - "was this field forest as of the reference date, and is it not forest now."
+// ESA WorldCover ships exactly a 2020 map (the reference year itself, not a 5-10 year window either
+// side of it like CCI/CDL) and a 2021 map, both 10 m, both on Planetary Computer via the same keyless
+// point-query API already used above for CDL/CCI/Impact Observatory - no new fetch pattern needed.
+// Class 10 = "Tree cover" in WorldCover's 11-class scheme; that is the only class this check treats
+// as forest (shrubland/grassland/etc. are not forest even though they can also be cleared).
+const WORLDCOVER_TREE_COVER = 10;
+const DEFOREST_DEG = 0.0000898; // WorldCover is 10 m, same pixel size as Impact Observatory
+async function worldcoverClass(year, lon, lat) {
+  const items = await stacItems('esa-worldcover', lon, lat);
+  const item = items.find(i => i.year === year);
+  if (!item) return null;
+  const v = await stacPoint('esa-worldcover', 'map', item.id, lon, lat);
+  return v == null ? null : v;
+}
+async function deforestationCheck(lat, lon, samples) {
+  const [c2020, c2021] = await Promise.all([
+    worldcoverClass(2020, lon, lat).catch(() => null),
+    worldcoverClass(2021, lon, lat).catch(() => null),
+  ]);
+  if (c2020 == null) return { available: false, source: 'none' };
+  const forestAtCutoff = c2020 === WORLDCOVER_TREE_COVER;
+  if (!forestAtCutoff) {
+    return { available: true, source: 'esa-worldcover', cutoffYear: 2020, forestAtCutoff: false, flag: 'not_forest_2020' };
+  }
+  // Forest at the cutoff: WorldCover's own 2021 map is the comparison - same source/method as the 2020
+  // read, so a change between them is a real signal rather than an artifact of switching datasets.
+  const stillForest = c2021 != null ? c2021 === WORLDCOVER_TREE_COVER : null;
+  const checkedThrough = c2021 != null ? 2021 : null;
+  // Sample a few more points inside the boundary so a partial clearing (part of the field only) is
+  // reported as a share, not an all-or-nothing flag - same pattern as the land-use share-of-field calc.
+  let shareOfField = null, sampleCount = null;
+  if (stillForest === false && samples && samples.length) {
+    const pts = distinctCells(samples, ([x, y]) => cellKey(x, y, DEFOREST_DEG), cellKey(lon, lat, DEFOREST_DEG));
+    const res = await within(mapLimit(pts, 4, async ([sx, sy]) => {
+      const v = await worldcoverClass(2020, sx, sy).catch(() => null);
+      return v == null ? null : v === WORLDCOVER_TREE_COVER;
+    }), SAMPLE_DEADLINE_MS, null);
+    if (res) {
+      const valid = res.filter(v => v != null);
+      if (valid.length) { shareOfField = valid.filter(Boolean).length / valid.length; sampleCount = valid.length; }
+    }
+  }
+  const flag = stillForest == null ? 'unknown' : stillForest ? 'still_forested' : 'possible_deforestation';
+  return {
+    available: true, source: 'esa-worldcover', cutoffYear: 2020, forestAtCutoff: true,
+    stillForest, checkedThrough, flag, shareOfField, samples: sampleCount,
+  };
+}
+function summarizeDeforestation(d) {
+  if (!d || !d.available) {
+    return { ...(d || { available: false }), summary: null, summaryEs: null };
+  }
+  if (d.flag === 'not_forest_2020') {
+    return { ...d, summary: 'Not forested as of the Dec 31, 2020 reference date (ESA WorldCover) - no deforestation-since-cutoff concern for this field.',
+      summaryEs: 'No tenía bosque al 31 de diciembre de 2020 (ESA WorldCover, fecha de referencia) - sin problema de deforestación desde esa fecha para este lote.' };
+  }
+  if (d.flag === 'still_forested') {
+    return { ...d, summary: `Forested as of Dec 31, 2020 and still reads as forest (checked through ${d.checkedThrough}). This field itself would not need to be planted yet.`,
+      summaryEs: `Tenía bosque al 31 de diciembre de 2020 y todavía se lee como bosque (revisado hasta ${d.checkedThrough}). Este lote en particular aún no estaría sembrado.` };
+  }
+  if (d.flag === 'possible_deforestation') {
+    const share = d.shareOfField != null ? ` (about ${Math.round(d.shareOfField * 100)}% of the field, from ${d.samples} sample points)` : '';
+    const shareEs = d.shareOfField != null ? ` (cerca del ${Math.round(d.shareOfField * 100)}% del lote, según ${d.samples} puntos de muestra)` : '';
+    return { ...d, summary: `Public maps suggest this field was forested as of Dec 31, 2020 and is not forested now${share} - worth confirming with the grower before treating this field as deforestation-free.`,
+      summaryEs: `Los mapas públicos sugieren que este lote tenía bosque al 31 de diciembre de 2020 y ya no lo tiene${shareEs} - conviene confirmar con el productor antes de considerar este lote libre de deforestación.` };
+  }
+  return { ...d, summary: 'Forested as of Dec 31, 2020; more recent status could not be determined from available maps.',
+    summaryEs: 'Tenía bosque al 31 de diciembre de 2020; no se pudo determinar el estado más reciente con los mapas disponibles.' };
+}
+
 function summarize(landuse) {
   if (!landuse || !landuse.available) return landuse || { available: false, source: 'none', suggestions: [] };
   const cur = landuse.currentState;
@@ -543,16 +618,19 @@ async function suggest(lat, lon, debug, samples) {
     }
     return (await timed('satellite', landuseSatellite(lat, lon, samples).catch(() => null))) || { available: false, source: 'none', suggestions: [] };
   })();
-  // Each half has its own deadline (below the function's 45 s limit) so one slow source cannot cost the
-  // other half its answer, and the client always gets JSON instead of a platform 504.
-  const [soil, landRaw] = await Promise.all([
+  const deforestP = timed('deforest', within(deforestationCheck(lat, lon, samples).catch(() => null), DEFOREST_DEADLINE_MS, null));
+  // Each has its own deadline (below the function's 45 s limit) so one slow source cannot cost the
+  // others their answer, and the client always gets JSON instead of a platform 504.
+  const [soil, landRaw, deforestRaw] = await Promise.all([
     within(soilP, DEADLINE_MS, { available: false, source: 'none' }),
     within(landP, DEADLINE_MS, { available: false, source: 'none', suggestions: [] }),
+    deforestP,
   ]);
   if (debug && landRaw) landRaw.debug = true;
   const landuse = summarize(landRaw);
   if (landuse && landuse.cropHistory) landuse.cropHistory = landuse.cropHistory.map(h => ({ year: h.year, category: h.category }));
-  return { ok: true, lat, lon, inUS: us, soil, landuse, timingMs: { total: Date.now() - t0, ...timing } };
+  const deforestation = summarizeDeforestation(deforestRaw);
+  return { ok: true, lat, lon, inUS: us, soil, landuse, deforestation, timingMs: { total: Date.now() - t0, ...timing } };
 }
 
 module.exports = async (req, res) => {
