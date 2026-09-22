@@ -749,13 +749,20 @@ document.addEventListener('change', e => {
 });
 function autoSuggestionsForBundle() {
   const d = suggestState.data;
-  if (!d) return null;
-  const soil = d.soil || {}, lu = d.landuse || {};
+  // NDVI has its own independent state (a separate opt-in fetch), so it is still worth recording even
+  // on the rare path where soil/land-use suggestions themselves never loaded.
+  const ndvi = ndviState.status === 'done' && ndviState.data ? {
+    start: ndviState.data.start, end: ndviState.data.end, scenesSearched: ndviState.data.scenesSearched,
+    seasons: (ndviState.data.phenology && ndviState.data.phenology.seasons || []).map(s => ({sos: s.sos, peak_date: s.peak_date, eos: s.eos, confidence: s.confidence})),
+  } : null;
+  if (!d && !ndvi) return null;
+  const soil = (d && d.soil) || {}, lu = (d && d.landuse) || {};
   return {
-    fetchedAt: suggestState.fetchedAt, lat: d.lat, lon: d.lon,
+    fetchedAt: suggestState.fetchedAt, lat: d && d.lat, lon: d && d.lon,
     soil: soil.available ? {source: soil.source, value: soil.value, confidence: soil.confidence, detail: soil.detail || null} : null,
     landuse: lu.available ? {source: lu.source, currentState: lu.currentState, cropHistory: lu.cropHistory || null,
       suggestions: (lu.suggestions || []).map(s => ({yearChange: s.yearChange, landFrom: s.landFrom, landTo: s.landTo, confidence: s.confidence, basis: s.basis, shareOfField: s.shareOfField == null ? null : s.shareOfField, samples: s.samples == null ? null : s.samples}))} : null,
+    ndvi,
     accepted: suggestState.accepted,
   };
 }

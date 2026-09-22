@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-gOhg4E+dLQ+ILED/Oc6vAs/9NQGtZdJsr1CKv89996k='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-fdp9j9Dwi+RZQqlwSLl8Z8rLv0Vf3oyIRfqZV3L2j5Q='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -372,7 +372,16 @@ function suggestionsHtml(a) {
     }).join('<br>') : `<br>${esc(T('No change detected', 'No se detectó ningún cambio'))}`;
     out += '</div>';
   }
-  if (!a.soil && !lu) out += `<p class="muted">${esc(T('No suggestions were available for this location.', 'No había sugerencias disponibles para este lugar.'))}</p>`;
+  const nd = a.ndvi;
+  if (nd) {
+    out += `<div class="sug"><b>${esc(T('Satellite greenness (NDVI)', 'Verdor satelital (NDVI)'))}</b> (${esc(nd.start)} – ${esc(nd.end)}, ${esc(String(nd.scenesSearched ?? '?'))} ${esc(T('scenes searched', 'escenas buscadas'))})`;
+    const seasons = Array.isArray(nd.seasons) ? nd.seasons : [];
+    out += seasons.length ? '<br>' + seasons.map((s, i) =>
+      `${esc(T(`Season ${i + 1}`, `Temporada ${i + 1}`))}: ${esc(s.sos || '?')} → ${esc(s.peak_date || '?')} → ${esc(s.eos || '?')} (${conf(s.confidence)})`
+    ).join('<br>') : `<br>${esc(T('No season detected in this window.', 'No se detectó ninguna temporada en esta ventana.'))}`;
+    out += '</div>';
+  }
+  if (!a.soil && !lu && !nd) out += `<p class="muted">${esc(T('No suggestions were available for this location.', 'No había sugerencias disponibles para este lugar.'))}</p>`;
   return out;
 }
 function kml(name, pts) {
