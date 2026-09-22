@@ -1206,7 +1206,7 @@ function renderDone() {
 langHooks.push(renderDone);
 function showDone(id, bundle) {
   clearDraft();
-  lastDone = {id, farm: bundle.farmName, field: bundle.fieldName};
+  lastDone = {id, farm: bundle.farmName, field: bundle.fieldName, bundle};
   saveStatus.clear();
   $('#formwrap').hidden = true;
   $('#savebar').style.display = 'none';
@@ -1250,6 +1250,141 @@ $('#another-field').onclick = () => {
   showToast(T('Ready for another field. Your farm and contact details were kept.', 'Listo para otro lote. Se conservaron los datos de su finca y de contacto.'), 5000);
 };
 $('#finish').onclick = () => { $('#finish-note').hidden = false; };
+
+// ---------------------------------------------------------------------------------------------
+// Field report: a printable summary built entirely from the bundle just submitted - no server round
+// trip, no re-fetching anything. Two static maps drawn from public OSM raster tiles onto a <canvas>
+// (same keyless-tile approach as the rest of this app; OSM's standard style already renders named
+// streams/rivers, which is what "with waterways noted" gets for free), the full Q&A reusing the same
+// [English,Spanish] option pairs the form itself uses, and the NDVI chart if the grower loaded one.
+function reportOptLabel(f, v) {
+  if (LANG !== 'es' || !f) return v;
+  const list = f.options || f.units;
+  if (!list) return v;
+  const hit = list.find(o => Array.isArray(o) ? o[0] === v : o === v);
+  return hit ? (Array.isArray(hit) ? hit[1] : hit) : v;
+}
+function reportValHtml(v, f) {
+  if (v === true) return esc(T('Yes', 'Sí'));
+  if (v && typeof v === 'object') {
+    if ('amount' in v || 'unit' in v) return esc([v.amount, reportOptLabel(f, v.unit)].filter(x => x !== '' && x != null).join(' '));
+    return '';
+  }
+  if (f && f.kind === 'multi' && typeof v === 'string') return esc(v.split('; ').map(x => reportOptLabel(f, x)).join('; '));
+  return esc(String(reportOptLabel(f, v)));
+}
+function reportKv(k, vHtml) { return `<div class="rep-kv"><span class="k">${esc(k)}</span><span class="v">${vHtml}</span></div>`; }
+function reportEntryHtml(sec, e) {
+  let out = '';
+  for (const f of sec.fields) if (e[f.id] !== undefined) out += reportKv(T(f.q, f.qEs), reportValHtml(e[f.id], f));
+  return out;
+}
+function reportAnswersHtml(answers, none) {
+  const a = answers || {}, nn = none || {};
+  const ids = SECTIONS.filter(s => s.enabled && s.id !== 'farm' && (a[s.id] !== undefined || nn[s.id])).map(s => s.id);
+  if (!ids.length) return `<p class="hint">${esc(T('No answers were filled in.', 'No se completó ninguna respuesta.'))}</p>`;
+  return ids.map(id => {
+    const sec = SECTIONS.find(s => s.id === id);
+    const title = T(sec.title, sec.titleEs);
+    if (nn[id] && a[id] === undefined) return `<div class="rep-sec"><h3>${esc(title)}</h3><p>${esc(T('None applied', 'No aplicó'))}</p></div>`;
+    const list = Array.isArray(a[id]) ? a[id] : [a[id]];
+    const body = list.map((e, i) => `<div class="rep-entry">${list.length > 1 ? `<div class="rep-n">${esc(T(`#${i + 1}`, `N.° ${i + 1}`))}</div>` : ''}${reportEntryHtml(sec, e)}</div>`).join('');
+    return `<div class="rep-sec"><h3>${esc(title)}</h3>${body}</div>`;
+  }).join('');
+}
+
+// Standard slippy-map tile math (same formula as the admin locator, generalized to a multi-tile canvas).
+function lonLatToTilePx(lon, lat, z) {
+  const n = 2 ** z;
+  const x = (lon + 180) / 360 * n;
+  const latRad = lat * Math.PI / 180;
+  const y = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+  return {x: x * 256, y: y * 256};
+}
+function metersPerPixel(z, lat) { return 156543.03392 * Math.cos(lat * Math.PI / 180) / (2 ** z); }
+function pickZoomForExtent(lonSpanDeg, latSpanDeg, lat, boxPx, maxZoom) {
+  const lonSpanM = lonSpanDeg * 111320 * Math.cos(lat * Math.PI / 180), latSpanM = latSpanDeg * 110540;
+  for (let z = maxZoom; z >= 2; z--) {
+    const mpp = metersPerPixel(z, lat);
+    if (lonSpanM / mpp <= boxPx * 0.72 && latSpanM / mpp <= boxPx * 0.72) return z;
+  }
+  return 2;
+}
+async function drawTileMap(canvas, centerLon, centerLat, zoom, ringPts) {
+  const W = canvas.width, H = canvas.height, TS = 256;
+  const ctx = canvas.getContext('2d');
+  const center = lonLatToTilePx(centerLon, centerLat, zoom);
+  const originX = center.x - W / 2, originY = center.y - H / 2;
+  const tx0 = Math.floor(originX / TS), ty0 = Math.floor(originY / TS);
+  const tx1 = Math.floor((originX + W) / TS), ty1 = Math.floor((originY + H) / TS);
+  const n = 2 ** zoom;
+  const loads = [];
+  for (let tx = tx0; tx <= tx1; tx++) {
+    for (let ty = Math.max(0, ty0); ty <= Math.min(n - 1, ty1); ty++) {
+      const wx = ((tx % n) + n) % n;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      loads.push(new Promise(res => { img.onload = () => res({img, tx, ty}); img.onerror = () => res(null); }));
+      img.src = `https://tile.openstreetmap.org/${zoom}/${wx}/${ty}.png`;
+    }
+  }
+  const tiles = (await Promise.all(loads)).filter(Boolean);
+  ctx.fillStyle = '#eeeede'; ctx.fillRect(0, 0, W, H);
+  for (const {img, tx, ty} of tiles) ctx.drawImage(img, tx * TS - originX, ty * TS - originY, TS, TS);
+  if (ringPts && ringPts.length >= 3) {
+    ctx.beginPath();
+    ringPts.forEach(([lon, lat], i) => {
+      const p = lonLatToTilePx(lon, lat, zoom);
+      const px = p.x - originX, py = p.y - originY;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(232,115,12,.28)'; ctx.fill();
+    ctx.strokeStyle = '#E8730C'; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+  ctx.font = '10px sans-serif'; ctx.fillStyle = 'rgba(0,0,0,.55)';
+  ctx.fillText('© OpenStreetMap contributors', 4, H - 5);
+}
+async function renderReportMaps(ring0) {
+  const pts = ring0.slice(0, -1); // ring is closed (last point repeats the first); drop it for bounds/centroid math
+  const lons = pts.map(p => p[0]), lats = pts.map(p => p[1]);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons), minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const centerLon = (minLon + maxLon) / 2, centerLat = (minLat + maxLat) / 2;
+  const closeZoom = pickZoomForExtent(maxLon - minLon, maxLat - minLat, centerLat, 340, 18);
+  const wideZoom = Math.max(2, Math.min(closeZoom - 7, 13)); // a regional view, not just a looser crop of the same tiles
+  const closeC = $('#report-map-close'), wideC = $('#report-map-wide');
+  if (closeC) await drawTileMap(closeC, centerLon, centerLat, closeZoom, ring0).catch(() => {});
+  if (wideC) await drawTileMap(wideC, centerLon, centerLat, wideZoom, ring0).catch(() => {});
+}
+function renderReport() {
+  if (!lastDone || !lastDone.bundle) return;
+  const b = lastDone.bundle;
+  $('#report-title').textContent = b.fieldName ? `${b.farmName} – ${b.fieldName}` : b.farmName;
+  const mapsEl = document.querySelector('.rep-maps');
+  if (b.boundary && b.boundary.ring && b.boundary.ring.length > 2) {
+    if (mapsEl) mapsEl.style.display = '';
+    renderReportMaps(b.boundary.ring);
+  } else if (mapsEl) mapsEl.style.display = 'none';
+  const ndviEl = $('#report-ndvi');
+  if (ndviEl) {
+    ndviEl.innerHTML = ndviState.status === 'done' && ndviState.data
+      ? `<h2>${esc(T('Satellite greenness (NDVI)', 'Verdor satelital (NDVI)'))}</h2>${ndviChartSvg(ndviState.data.series)}`
+      : '';
+  }
+  $('#report-answers').innerHTML = reportAnswersHtml(b.answers, b.noneApplied);
+}
+langHooks.push(() => { if (!$('#report').hidden) renderReport(); });
+$('#view-report').onclick = () => {
+  $('#done').hidden = true;
+  $('#report').hidden = false;
+  renderReport();
+  window.scrollTo(0, 0);
+  $('#report').focus();
+};
+$('#report-back').onclick = () => { $('#report').hidden = true; $('#done').hidden = false; window.scrollTo(0, 0); };
+$('#report-print').onclick = () => window.print();
+$('#report-print2').onclick = () => window.print();
+$('#report-another-field').onclick = () => { $('#report').hidden = true; $('#another-field').click(); };
 
 // ---------------------------------------------------------------------------------------------
 // Clear survey / logout. Unlike "Submit another field" (which deliberately keeps farm and contact

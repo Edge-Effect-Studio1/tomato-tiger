@@ -230,6 +230,26 @@
     .card{padding:12px}
     .maptools button{flex:1 1 calc(50% - 8px)}
   }
+  #report{max-width:900px;margin:0 auto;padding:16px}
+  #report h1{font-size:20px;margin:8px 0 4px}
+  #report h2{margin-top:18px}
+  .rep-maps{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .rep-maps>div{flex:1 1 320px;min-width:260px}
+  .rep-maps canvas{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#eeeede;display:block}
+  .rep-sec{border-top:1px solid var(--line);padding:10px 0}
+  .rep-sec:first-child{border-top:0}
+  .rep-sec h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--olive);margin:0 0 6px}
+  .rep-entry{margin-bottom:8px}
+  .rep-n{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+  .rep-kv{display:flex;gap:10px;padding:2px 0;font-size:13.5px;border-bottom:1px dotted var(--line)}
+  .rep-kv .k{color:var(--muted);flex:0 0 46%}
+  .rep-kv .v{flex:1 1 54%;font-weight:600}
+  @media print{
+    .no-print,button,#toast,header,#formwrap,#savebar,#done{display:none !important}
+    body{background:#fff}
+    #report{max-width:100%}
+    .rep-maps canvas{border-color:#999}
+  }
 </style>
 </head>
 <body>
@@ -389,10 +409,32 @@
   <div class="refno" id="done-ref"></div></div>
   <p class="hint"><span data-l="en">Keep this number in case you need to contact us about this survey (rverhofste@adamsgrp.com).</span><span data-l="es">Guarde este número por si necesita comunicarse con nosotros sobre esta encuesta (rverhofste@adamsgrp.com).</span></p>
   <div class="row">
+    <button id="view-report" class="ghost"><span data-l="en">View field report</span><span data-l="es">Ver informe del lote</span></button>
     <button id="another-field"><span data-l="en">Submit another field</span><span data-l="es">Enviar otro lote</span></button>
     <button id="finish" class="ghost"><span data-l="en">I am finished</span><span data-l="es">Terminé</span></button>
   </div>
   <p class="hint" id="finish-note" hidden style="margin-top:14px"><span data-l="en">All done. You can close this page.</span><span data-l="es">Listo. Puede cerrar esta página.</span></p>
+</div>
+
+<div id="report" hidden tabindex="-1">
+  <div class="row no-print">
+    <button id="report-back" class="ghost"><span data-l="en">&larr; Back</span><span data-l="es">&larr; Volver</span></button>
+    <button id="report-print" class="ghost"><span data-l="en">&#128424; Print / Save as PDF</span><span data-l="es">&#128424; Imprimir / Guardar como PDF</span></button>
+  </div>
+  <h1 id="report-title"></h1>
+  <p class="hint"><span data-l="en">Modeled from public satellite and soil maps where noted - a starting point, not a lab result.</span><span data-l="es">Modelado a partir de mapas satelitales y de suelo públicos donde se indica - un punto de partida, no un resultado de laboratorio.</span></p>
+  <h2><span data-l="en">Field boundary</span><span data-l="es">Límite del lote</span></h2>
+  <div class="rep-maps">
+    <div><canvas id="report-map-close" width="340" height="260"></canvas><p class="hint"><span data-l="en">This field, with nearby streams and roads</span><span data-l="es">Este lote, con arroyos y caminos cercanos</span></p></div>
+    <div><canvas id="report-map-wide" width="340" height="260"></canvas><p class="hint"><span data-l="en">The wider area around it</span><span data-l="es">La zona más amplia alrededor</span></p></div>
+  </div>
+  <div id="report-ndvi"></div>
+  <h2><span data-l="en">Your answers</span><span data-l="es">Sus respuestas</span></h2>
+  <div id="report-answers"></div>
+  <div class="row no-print">
+    <button id="report-print2" class="ghost"><span data-l="en">&#128424; Print / Save as PDF</span><span data-l="es">&#128424; Imprimir / Guardar como PDF</span></button>
+    <button id="report-another-field"><span data-l="en">Submit another field</span><span data-l="es">Enviar otro lote</span></button>
+  </div>
 </div>
 </main>
 <div id="savebar">
