@@ -1,6 +1,7 @@
 {
   "functions": {
-    "api/suggest-field.js": { "maxDuration": 45 }
+    "api/suggest-field.js": { "maxDuration": 45 },
+    "api/ndvi.js": { "maxDuration": 60 }
   },
   "headers": [
     {

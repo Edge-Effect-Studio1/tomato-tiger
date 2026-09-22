@@ -297,6 +297,21 @@ langHooks.push(renderSoilLabFiles);
 // change since 2007 from public data. Nothing is ever written into an answer until the grower taps
 // Use this / Add this, and what was suggested and accepted is stored with the submission.
 const suggestState = { key: null, status: 'idle', data: null, fetchedAt: null, accepted: {soil: false, landuse: []} };
+// What "Use this soil" last wrote, so a boundary redrawn to a genuinely different spot can tell "the
+// grower typed this" apart from "this is just what the last parcel's suggestion left behind" - without
+// this, moving the boundary showed the PREVIOUS parcel's soil type/texture/pH/organic-matter with no
+// indication it was stale (reported live 2026-09-22). Cleared, never silently overwritten: the grower
+// still has to tap "Use this soil" again for the new spot, same opt-in as the first time.
+let autoFilledSoil = null;
+function clearStaleSoilFields() {
+  if (!autoFilledSoil) return;
+  const ids = {soilType: 'q-soilinfo-0-soilType', soilTexture: 'q-soilinfo-0-soilTexture', soilPH: 'q-soilinfo-0-soilPH', soilOrganicMatter: 'q-soilinfo-0-soilOrganicMatter'};
+  for (const [k, id] of Object.entries(ids)) {
+    const el = document.getElementById(id);
+    if (el && autoFilledSoil[k] != null && el.value === autoFilledSoil[k]) { el.value = ''; if (el.classList.contains('pct-num')) syncPctSlider(el); }
+  }
+  autoFilledSoil = null;
+}
 const stateLabel = s => { const p = LANDUSE_STATES.find(x => x[0] === s); return p ? T(p[0], p[1]) : String(s || ''); };
 const CONF_LABEL = {high: ['high confidence', 'confianza alta'], medium: ['medium confidence', 'confianza media'], low: ['low confidence', 'confianza baja']};
 const chipHead = () => `<div class="chip-hd">${esc(T('Suggested, please verify', 'Sugerido, por favor verifique'))}</div>`;
@@ -307,6 +322,7 @@ async function fetchSuggestions(lat, lon, pts) {
   if (!SUGGEST_URL || !/^https?:$/.test(location.protocol)) return;
   const key = lat.toFixed(3) + ',' + lon.toFixed(3) + '|' + Math.round(ringAcres(ring));
   if (suggestState.key === key && suggestState.status !== 'error') return;
+  if (suggestState.key !== null && suggestState.key !== key) clearStaleSoilFields(); // a genuinely different spot, not just the first fetch
   Object.assign(suggestState, {key, status: 'loading', data: null, fetchedAt: null, accepted: {soil: false, landuse: []}});
   renderSuggestions();
   const ctrl = new AbortController();
@@ -406,6 +422,20 @@ function useSoil() {
   const el = document.getElementById('q-soilinfo-0-soilType');
   if (!soil || !soil.value || !el) return;
   el.value = soil.value; // always the English wording, so Adams' data stays consistent
+  // The same lookup that names the soil type (SSURGO for US fields, SoilGrids worldwide - SSURGO's
+  // own gaps backfilled from SoilGrids server-side) also carries structured texture/pH/organic-matter
+  // numbers; fill those in too rather than making the grower retype what public data already answers.
+  // Only touches fields still blank, same as every other auto-fill on this page.
+  autoFilledSoil = {soilType: el.value, soilTexture: null, soilPH: null, soilOrganicMatter: null};
+  const d = soil.detail;
+  if (d) {
+    const tex = document.getElementById('q-soilinfo-0-soilTexture');
+    if (tex && !tex.value && d.textureClassEn) { tex.value = d.textureClassEn; autoFilledSoil.soilTexture = tex.value; }
+    const ph = document.getElementById('q-soilinfo-0-soilPH');
+    if (ph && !ph.value && d.pH != null) { ph.value = String(d.pH); autoFilledSoil.soilPH = ph.value; }
+    const om = document.getElementById('q-soilinfo-0-soilOrganicMatter');
+    if (om && !om.value && d.organicMatterPct != null) { om.value = String(d.organicMatterPct); syncPctSlider(om); autoFilledSoil.soilOrganicMatter = om.value; }
+  }
   suggestState.accepted.soil = true;
   renderSuggestions(); scheduleDraftSave();
 }
@@ -682,7 +712,7 @@ function scheduleDraftSave() {
     // text answer along with the photos. A reload cannot recover in-memory photos either way.
     const draft = snapshotDraft();
     draft.photos = [];
-    draft._auto = {area: autoFilledArea, country: autoFilledCountry};
+    draft._auto = {area: autoFilledArea, country: autoFilledCountry, soil: autoFilledSoil};
     try {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); }
       catch { draft.additionalBoundaries = []; draft.soilLabFiles = []; localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } // big KML text or a lab PDF can fill the quota
@@ -737,7 +767,7 @@ function loadBundle(bundle) {
   $('#q-consent').checked = !!(bundle.consent && bundle.consent.agreed);
   if (bundle.clientId) clientId = bundle.clientId;
 
-  if (bundle._auto) { autoFilledArea = bundle._auto.area || null; autoFilledCountry = bundle._auto.country || null; }
+  if (bundle._auto) { autoFilledArea = bundle._auto.area || null; autoFilledCountry = bundle._auto.country || null; autoFilledSoil = bundle._auto.soil || null; }
   if (bundle.boundary && Array.isArray(bundle.boundary.ring) && bundle.boundary.ring.length > 2 && ringInRange(bundle.boundary.ring)) {
     const r = bundle.boundary.ring;
     const first = r[0], last = r[r.length - 1];
@@ -924,7 +954,7 @@ function resetForNextField() {
   renderSuggestions();
   machineAutoTriggers.clear();
   clientId = uuid();
-  autoFilledArea = null; autoFilledCountry = null;
+  autoFilledArea = null; autoFilledCountry = null; autoFilledSoil = null;
 }
 $('#another-field').onclick = () => {
   resetForNextField();

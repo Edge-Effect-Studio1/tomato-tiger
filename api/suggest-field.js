@@ -204,19 +204,34 @@ const WRB = {
 
 async function soilSSURGO(lat, lon) {
   // lat/lon are validated finite numbers, so interpolating them into the WKT cannot inject anything.
-  const query = `SELECT TOP 1 mu.muname, c.compname, c.taxorder, c.drainagecl FROM mapunit mu INNER JOIN component c ON c.mukey = mu.mukey WHERE mu.mukey IN (SELECT DISTINCT mukey FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${lon} ${lat})')) ORDER BY c.comppct_r DESC`;
+  // chorizon is joined at hzdept_r = 0 (the surface horizon) in the same round-trip, so the structured
+  // texture/pH/organic-matter fields fill in from the same real soil survey as the name/classification,
+  // not a second, lower-resolution source. Real SSURGO om_r is already %organic matter (no unit
+  // conversion needed, unlike SoilGrids below which only reports organic *carbon*).
+  const query = `SELECT TOP 1 mu.muname, c.compname, c.taxorder, c.drainagecl, ch.ph1to1h2o_r, ch.om_r, ch.sandtotal_r, ch.silttotal_r, ch.claytotal_r FROM mapunit mu INNER JOIN component c ON c.mukey = mu.mukey LEFT JOIN chorizon ch ON ch.cokey = c.cokey AND ch.hzdept_r = 0 WHERE mu.mukey IN (SELECT DISTINCT mukey FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('POINT(${lon} ${lat})')) ORDER BY c.comppct_r DESC`;
   const j = await retry(() => getJson(SDA, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, format: 'JSON' }) }, 9000), 2, 500);
   const row = j && j.Table && j.Table[0];
   if (!row || !row[0]) return null;
-  const [muname, compname, taxorder, drainage] = row;
+  const [muname, compname, taxorder, drainage, ph, om, sand, silt, clay] = row;
   const value = taxorder ? `${muname} (${taxorder})` : muname;
   const bits = [];
   if (drainage) bits.push(String(drainage).toLowerCase());
+  const rawTex = textureClass(clay == null ? null : +clay, sand == null ? null : +sand, silt == null ? null : +silt);
+  const textureClassEn = rawTex ? rawTex.replace(/^[a-z]/, ch => ch.toUpperCase()) : null;
+  const phVal = ph == null ? null : +ph, omVal = om == null ? null : +om;
+  const numsEn = (textureClassEn || phVal != null || omVal != null)
+    ? ` Topsoil: ${[textureClassEn && `${textureClassEn.toLowerCase()} texture`, phVal != null && `pH ${phVal}`, omVal != null && `${omVal}% organic matter`].filter(Boolean).join(', ')}.` : '';
+  const numsEs = (textureClassEn || phVal != null || omVal != null)
+    ? ` Capa superior: ${[textureClassEn && `textura ${TEXTURE_ES[rawTex] || textureClassEn.toLowerCase()}`, phVal != null && `pH ${phVal}`, omVal != null && `${omVal}% materia orgánica`].filter(Boolean).join(', ')}.` : '';
   return {
     available: true, source: 'ssurgo', value, confidence: 'high',
-    label: `${value}${bits.length ? ' - ' + bits.join(', ') : ''}. USDA soil survey (SSURGO).`,
-    labelEs: `${value}${bits.length ? ' - drenaje: ' + bits.join(', ') : ''}. Estudio de suelos del USDA (SSURGO).`,
-    detail: { compname, taxorder, drainage },
+    label: `${value}${bits.length ? ' - ' + bits.join(', ') : ''}. USDA soil survey (SSURGO).${numsEn}`,
+    labelEs: `${value}${bits.length ? ' - drenaje: ' + bits.join(', ') : ''}. Estudio de suelos del USDA (SSURGO).${numsEs}`,
+    detail: {
+      compname, taxorder, drainage,
+      clayPct: clay == null ? null : +clay, sandPct: sand == null ? null : +sand, siltPct: silt == null ? null : +silt,
+      pH: phVal, organicMatterPct: omVal, textureClassEn,
+    },
   };
 }
 
@@ -268,7 +283,12 @@ async function soilGlobal(lat, lon) {
   };
   const detail = { clayPct: val('clay'), sandPct: val('sand'), siltPct: val('silt'), pH: val('phh2o'), organicCarbonGPerKg: val('soc') };
   const tex = textureClass(detail.clayPct, detail.sandPct, detail.siltPct);
-  detail.textureClass = tex;
+  detail.textureClass = tex; // kept for back-compat; textureClassEn below is the name the client actually reads
+  detail.textureClassEn = tex ? tex.replace(/^[a-z]/, ch => ch.toUpperCase()) : null;
+  // SoilGrids reports organic CARBON (g/kg), not organic matter % - the survey asks for the latter.
+  // The conversion is the standard van Bemmelen factor (organic matter = organic carbon x 1.724),
+  // itself an approximation, so this is a model estimate squared, not a measurement - labeled as such.
+  detail.organicMatterPct = detail.organicCarbonGPerKg == null ? null : Math.round((detail.organicCarbonGPerKg / 10) * 1.724 * 10) / 10;
   if (!name && !tex) return null;
   const g = name ? (WRB[name] || null) : null;
   const texEn = tex ? `${tex} texture` : '', texEs = tex ? `textura ${TEXTURE_ES[tex]}` : '';
@@ -483,8 +503,22 @@ async function suggest(lat, lon, debug, samples) {
   const soilP = (async () => {
     if (!us) return (await timed('soilgrids', soilGlobal(lat, lon).catch(() => null))) || { available: false, source: 'none' };
     const s = await timed('ssurgo', soilSSURGO(lat, lon).catch(() => null));
-    if (s) return s;
-    return (await timed('soilgrids', soilGlobal(lat, lon).catch(() => null))) || { available: false, source: 'none' };
+    if (!s) return (await timed('soilgrids', soilGlobal(lat, lon).catch(() => null))) || { available: false, source: 'none' };
+    // SSURGO has the name/classification but some map units have no lab-analyzed horizon on file, so
+    // clay/sand/silt/pH/organic-matter can come back null even though the survey itself succeeded.
+    // Backfill just those structured numbers from the global model rather than leaving them empty -
+    // SSURGO's own name/classification stays authoritative either way, only the missing numbers borrow
+    // from SoilGrids.
+    if (s.detail && s.detail.pH == null && s.detail.organicMatterPct == null) {
+      const g = await timed('soilgrids_backfill', soilGlobal(lat, lon).catch(() => null));
+      if (g && g.detail) {
+        // Only fill fields SSURGO itself left null - never overwrite a real SSURGO number with a
+        // modeled one, even if this backfill pass also has a value for it.
+        for (const [k, v] of Object.entries(g.detail)) if (v != null && s.detail[k] == null) s.detail[k] = v;
+        s.detail.backfilledFrom = 'soilgrids';
+      }
+    }
+    return s;
   })();
   // CDL runs first for US points (it is far better than the global data), but it depends on a single
   // external service (nassgeodata.gmu.edu) that has been seen to fail slow rather than fail fast - every
