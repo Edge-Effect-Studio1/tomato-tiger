@@ -31,7 +31,9 @@ function fieldInputHtml(base, f) {
     case 'percent':
       return `<input id="${base}" type="number" step="any" min="0" max="100" inputmode="decimal" placeholder="%">`;
     case 'number':
-      return `<input id="${base}" type="number" step="any" inputmode="decimal"${phAttr}>`;
+      // every 'number' field on this survey is a count, a pass, an age or a demand reading - none of
+      // them are ever legitimately negative, so a plain floor at 0 catches typos and stray minus signs.
+      return `<input id="${base}" type="number" step="any" min="0" inputmode="decimal"${phAttr}>`;
     case 'date':
       return `<input id="${base}" type="date">`;
     case 'tick':
@@ -158,6 +160,9 @@ async function compressFile(file) {
   return drawScaled(await loadImage(dataUrl), 1280, 0.7);
 }
 async function recompress(dataUri, maxEdge, quality) { return drawScaled(await loadImage(dataUri), maxEdge, quality); }
+function readAsDataUri(file) {
+  return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+}
 $('#photo-input').onchange = async e => {
   const files = [...e.target.files];
   e.target.value = '';
@@ -171,7 +176,8 @@ $('#photo-input').onchange = async e => {
   renderPhotos();
 };
 const payloadEstimate = () =>
-  photos.reduce((s, p) => s + (p.dataUri ? p.dataUri.length : 0), 0) + extraBoundaries.reduce((s, f) => s + (f.text || '').length, 0) + 60000;
+  photos.reduce((s, p) => s + (p.dataUri ? p.dataUri.length : 0), 0) +
+  extraBoundaries.reduce((s, f) => s + (f.text || '').length + (f.dataUri || '').length, 0) + 60000;
 function renderPhotos() {
   const grid = $('#photo-grid');
   grid.innerHTML = '';
@@ -193,14 +199,25 @@ function renderPhotos() {
 }
 langHooks.push(renderPhotos);
 
-// Additional farm polygons beyond the one boundary drawn on the map - stored as raw KML/GeoJSON
-// text per file (not parsed/rendered), same as any other uploaded attachment in the bundle.
+// Additional farm polygons beyond the one boundary drawn on the map - none of these are parsed or
+// rendered, just carried along in the bundle for Adams to open by hand. Text formats (KML, GeoJSON,
+// GPX) are stored as plain text, same as before. Shapefile bundles (usually a .zip of .shp/.dbf/.shx)
+// and photos of a parcel map are binary, so they go through the same image-compression path the
+// field's own photos use when they are images, or are kept as-is (just base64-encoded) otherwise.
+const EXTRA_TEXT_EXT = /\.(kml|geojson|json|gpx|xml)$/i;
 $('#extra-boundaries-input').onchange = async e => {
   const files = [...e.target.files];
   e.target.value = '';
   for (const file of files) {
-    if (file.size > 400 * 1024) { showToast(T(`"${file.name}" is too large (over 400 KB) and was skipped.`, `"${file.name}" es demasiado grande (más de 400 KB) y se omitió.`), 6000); continue; }
-    try { extraBoundaries.push({filename: file.name, text: await file.text()}); } catch {}
+    const isImage = /^image\//.test(file.type) || /\.(jpe?g|png|heic|heif)$/i.test(file.name);
+    const isText = !isImage && (EXTRA_TEXT_EXT.test(file.name) || /^(text\/|application\/(geo\+)?json|application\/vnd\.google-earth)/.test(file.type));
+    const cap = isImage ? 8 * 1024 * 1024 : (isText ? 400 * 1024 : 4 * 1024 * 1024); // raw shapefile .zip etc: 4 MB
+    if (file.size > cap) { showToast(T(`"${file.name}" is too large and was skipped.`, `"${file.name}" es demasiado grande y se omitió.`), 6000); continue; }
+    try {
+      if (isImage) extraBoundaries.push({filename: file.name, dataUri: await compressFile(file)});
+      else if (isText) extraBoundaries.push({filename: file.name, text: await file.text()});
+      else extraBoundaries.push({filename: file.name, dataUri: await readAsDataUri(file)});
+    } catch { showToast(T(`Could not read "${file.name}".`, `No se pudo leer "${file.name}".`), 5000); }
   }
   renderExtraBoundaries();
   scheduleDraftSave();

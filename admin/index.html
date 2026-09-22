@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-vGWuN3YLyQp5QlQtOnafwoLhYpX15waawUWwrExRtEg='; style-src 'sha256-KGpOPwdsA3pJooOi7slscPpxsqX5PA5EOehdkiCfVOM='; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-fN1mNxQzYs/gBVj9GghMCUgR1R88iFoHRJbOLv5rCtY='; style-src 'sha256-KGpOPwdsA3pJooOi7slscPpxsqX5PA5EOehdkiCfVOM='; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -430,13 +430,37 @@ async function downloadJson(id) {
     download(`adams-grower-survey_${safeName(sub.farm_name)}_${id}.json`, JSON.stringify(out, null, 2), 'application/json');
   } catch (err) { failMsg(err); }
 }
+function dataUriToBlob(dataUri) {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUri || '');
+  if (!m) return null;
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], {type: m[1]});
+}
 async function downloadExtra(id, idx) {
   try {
     const sub = await getSub(id);
     const f = (sub.bundle.additionalBoundaries || [])[idx];
     if (!f) return;
     let name = String(f.filename || 'boundary').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.\- ]/g, '_').slice(0, 80);
-    if (!/\.(kml|geojson|json)$/i.test(name)) name += '.txt';
+    // Text formats (KML/GeoJSON/GPX) are stored as plain text; photos and shapefile bundles are stored
+    // as a data URI (binary), same as the field's own photos - decode that back into its real bytes.
+    if (f.dataUri) {
+      const blob = dataUriToBlob(f.dataUri);
+      if (!blob) return;
+      if (!/\.[a-z0-9]+$/i.test(name)) {
+        const ext = {'image/jpeg': '.jpg', 'image/png': '.png', 'application/zip': '.zip'}[blob.type] || '';
+        name += ext;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      return;
+    }
+    if (!/\.(kml|geojson|json|gpx)$/i.test(name)) name += '.txt';
     download(name, String(f.text || ''), 'text/plain');
   } catch (err) { failMsg(err); }
 }

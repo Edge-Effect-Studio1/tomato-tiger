@@ -156,7 +156,7 @@ const SECTIONS = [
     {id: 'delivered', q: 'Roughly how much of this crop did you sell to Adams or your exporter that season? (optional)', qEs: 'Más o menos, ¿cuánto de este cultivo vendió a Adams o a su exportador en esa campaña? (opcional)', kind: 'numberUnit', units: UNIT_YIELD,
       hint: 'A rough number is fine. It helps us match this survey to our purchase records.', hintEs: 'Un número aproximado está bien. Nos sirve para relacionar esta encuesta con nuestros registros de compra.'},
     {id: 'mailing', q: 'Mailing address (optional)', qEs: 'Dirección postal (opcional)', kind: 'text', full: true,
-      hint: 'Only used if Adams wants to mail you a thank-you. Never shared.', hintEs: 'Solo se usa si Adams quiere enviarle un agradecimiento por correo postal. No se comparte.'},
+      hint: 'Adams would love to send you a thank-you. This is optional, and is not shared.', hintEs: 'A Adams le encantaría enviarle un agradecimiento. Esto es opcional y no se comparte.'},
   ]},
   {id: 'cropsoil', title: 'Crop & Soil', titleEs: 'Cultivo y suelo', enabled: true, repeatable: false,
     why: 'What you grew in this field and what its soil is like. Adams uses this to work out yields and the carbon and nitrogen balance of the field. You do not need to look up climate or soil chemistry; Adams gets those from your boundary.',
@@ -175,7 +175,10 @@ const SECTIONS = [
     {id: 'totalHarvest', q: 'Total harvest from this field', qEs: 'Cosecha total de este lote', kind: 'numberUnit', units: UNIT_YIELD,
       hint: 'The total for the whole field. If you only know the yield per hectare or acre, multiply it by the area above, or tell us in Notes.', hintEs: 'El total de todo el lote. Si solo sabe el rendimiento por hectárea, multiplíquelo por la superficie de arriba, o cuéntenos en Notas.'},
     {id: 'residueMgmt', q: 'What do you do with the crop residue after harvest?', qEs: '¿Qué hace con el rastrojo después de la cosecha?', kind: 'select', options: RESIDUE_MGMT, full: true},
-    {id: 'residueDry', q: 'Residue left, dry weight (only if you know it)', qEs: 'Rastrojo que dejó en el lote, peso seco (solo si lo sabe)', kind: 'text', placeholder: 'amount + unit (kg, lb, tonne)', phEs: 'cantidad + unidad (kg, lb, tonelada)'},
+    {id: 'residueDry', q: 'Residue left, dry weight (only if you know it)', qEs: 'Rastrojo que dejó en el lote, peso seco (solo si lo sabe)', kind: 'text', placeholder: 'amount + unit (kg, lb, tonne)', phEs: 'cantidad + unidad (kg, lb, tonelada)',
+      // only a real question when residue actually stays on the field, in whatever form - incorporated
+      // rice straw still has a mass; residue that was removed or burned does not.
+      dependsOn: {field: 'residueMgmt', show: ['Left distributed on field, OR incorporated, OR mulched', 'Rice straw incorporation more than 30 days before cultivation', 'Rice straw incorporation less than 30 days before cultivation']}},
     // country and soilType are filled in automatically once the boundary settles (a reverse-geocode call and
     // the suggestion API respectively), both of which can take a few seconds. Placed last in this section so
     // the lookups usually finish before the grower gets here, instead of greeting them with a blank/loading field.

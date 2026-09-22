@@ -329,7 +329,7 @@
 
   <div class="card">
     <h2><span data-l="en">Photos</span><span data-l="es">Fotos</span></h2>
-    <p><span data-l="en">Optional. One or two photos help us picture the field: the crop, the soil or the residue. Photos can show where your farm is, so we keep them private under the same promise as your location. Please leave people out of the photos. You can add up to 10.</span><span data-l="es">Opcional. Una o dos fotos nos ayudan a imaginar el lote: el cultivo, el suelo o el rastrojo. Las fotos pueden mostrar dónde está su finca, así que las guardamos en privado, con la misma promesa que su ubicación. Por favor evite que salgan personas. Puede agregar hasta 10.</span></p>
+    <p><span data-l="en">Optional, but the more the better! We would love to see the crop, the soil, the residue, or you out in the field - a selfie is welcome too. Photos can show where your farm is, so we keep them private under the same promise as your location. You can add up to 10.</span><span data-l="es">Opcional, ¡pero cuantas más, mejor! Nos encantaría ver el cultivo, el suelo, el rastrojo, o a usted en el lote - una selfie también es bienvenida. Las fotos pueden mostrar dónde está su finca, así que las guardamos en privado, con la misma promesa que su ubicación. Puede agregar hasta 10.</span></p>
     <input type="file" id="photo-input" accept="image/*" multiple aria-label="Photos">
     <div class="photog" id="photo-grid"></div>
     <div id="photo-size-hint" class="hint"></div>
@@ -342,8 +342,8 @@
 
   <div class="card">
     <h2><span data-l="en">Other fields on your farm</span><span data-l="es">Otros lotes de su finca</span></h2>
-    <p><span data-l="en">Do you farm other fields besides this one? If you have their boundaries as KML or GeoJSON files, upload them here. To describe another field in full, tap <b>Submit another field</b> after you submit this one; it keeps your farm and contact details.</span><span data-l="es">¿Cultiva otros lotes además de este? Si tiene sus perímetros como archivos KML o GeoJSON, súbalos aquí. Para describir otro lote con todo detalle, toque <b>Enviar otro lote</b> después de enviar este. Se conservan los datos de su finca y de contacto.</span></p>
-    <input type="file" id="extra-boundaries-input" accept=".kml,.geojson,.json,application/vnd.google-earth.kml+xml,application/geo+json,application/json" multiple aria-label="Additional boundaries">
+    <p><span data-l="en">Do you farm other fields besides this one? If you have their boundaries - as KML, GeoJSON or GPX files, a shapefile (.zip), or even a photo of a parcel map - upload them here. To describe another field in full, tap <b>Submit another field</b> after you submit this one; it keeps your farm and contact details. Prefer email? Send them to rverhofste@adamsgrp.com.</span><span data-l="es">¿Cultiva otros lotes además de este? Si tiene sus perímetros - como archivos KML, GeoJSON o GPX, un shapefile (.zip), o incluso una foto de un mapa del lote - súbalos aquí. Para describir otro lote con todo detalle, toque <b>Enviar otro lote</b> después de enviar este. Se conservan los datos de su finca y de contacto. ¿Prefiere el correo? Envíelos a rverhofste@adamsgrp.com.</span></p>
+    <input type="file" id="extra-boundaries-input" accept=".kml,.geojson,.json,.gpx,.zip,.shp,.dbf,.shx,.prj,image/*,application/vnd.google-earth.kml+xml,application/geo+json,application/json,application/gpx+xml,application/zip,application/x-zip-compressed" multiple aria-label="Additional boundaries">
     <div id="extra-boundaries-list" class="hint"></div>
   </div>
 
