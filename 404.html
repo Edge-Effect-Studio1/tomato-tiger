@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Page not found / Página no encontrada</title>
+<script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
+<style>
+  :root{--green:#193B0A;--cream:#EEEEDE;--yellow:#FBE661;--ink:#20241a;--white:#fbfbf5;--line:#d8d8c8}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--cream)}
+  html[lang="en"] [data-l="es"],html[lang="es"] [data-l="en"]{display:none !important}
+  header{background:var(--green);color:var(--cream);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  header .dot{width:20px;height:20px;border-radius:50%;background:var(--yellow);flex:none}
+  header .t{flex:1 1 200px;font-weight:700}
+  .langsw{display:inline-flex;border:1px solid rgba(238,238,222,.6);border-radius:8px;overflow:hidden}
+  .langsw button{background:transparent;color:var(--cream);border:0;padding:0 14px;min-height:44px;min-width:50px;font:inherit;font-weight:700;font-size:14px;letter-spacing:.05em;cursor:pointer}
+  .langsw button[aria-pressed="true"]{background:var(--yellow);color:var(--green)}
+  main{max-width:520px;margin:40px auto;padding:0 16px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px}
+  h1{font-size:20px;margin:0 0 10px;color:var(--green)}
+  p{line-height:1.5;margin:0 0 14px}
+  a.btn{display:inline-flex;align-items:center;min-height:44px;padding:8px 18px;border-radius:8px;background:var(--green);color:var(--cream);font-weight:600;text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <span class="t">Adams Grain Company</span>
+  <div class="langsw" role="group" aria-label="Language / Idioma">
+    <button type="button" data-lang="en" aria-pressed="true">EN</button>
+    <button type="button" data-lang="es" aria-pressed="false">ES</button>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h1><span data-l="en">This page does not exist</span><span data-l="es">Esta página no existe</span></h1>
+    <p><span data-l="en">The link may be mistyped or out of date. If you were sent a survey link, ask the person who sent it for a new one.</span><span data-l="es">Puede que el enlace tenga un error o esté vencido. Si le enviaron un enlace a la encuesta, pídale uno nuevo a la persona que se lo envió.</span></p>
+    <a class="btn" href="/"><span data-l="en">Go to the survey</span><span data-l="es">Ir a la encuesta</span></a>
+  </div>
+</main>
+<script>
+(function () {
+  var btns = document.querySelectorAll('.langsw button');
+  function paint() { for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', String(btns[i].getAttribute('data-lang') === document.documentElement.lang)); }
+  for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () {
+    var l = this.getAttribute('data-lang');
+    document.documentElement.lang = l;
+    try { localStorage.setItem('adams-survey-lang', l); } catch (e) {}
+    paint();
+  });
+  paint();
+})();
+</script>
+</body>
+</html>

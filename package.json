@@ -1,0 +1,10 @@
+{
+  "name": "adams-grower-survey",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Adams Grower Programs field survey (survey.html) + Postgres submission endpoint, deployed standalone on Vercel.",
+  "dependencies": {
+    "@vercel/postgres": "0.10.0",
+    "proj4": "2.22.0"
+  }
+}

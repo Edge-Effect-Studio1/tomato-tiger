@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-vGWuN3YLyQp5QlQtOnafwoLhYpX15waawUWwrExRtEg='; style-src 'sha256-KGpOPwdsA3pJooOi7slscPpxsqX5PA5EOehdkiCfVOM='; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Adams Survey Submissions</title>
+<script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
+<style>
+  :root{--green:#193B0A;--cream:#EEEEDE;--yellow:#FBE661;--olive:#5d6244;--ink:#20241a;
+    --line:#d8d8c8;--white:#fbfbf5;--bad:#a5362b;--good:#2f6a2f;--muted:#5f6350}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--cream)}
+  [hidden]{display:none !important}
+  html[lang="en"] [data-l="es"],html[lang="es"] [data-l="en"]{display:none !important}
+  header{background:var(--green);color:var(--cream);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  header .dot{width:20px;height:20px;border-radius:50%;background:var(--yellow);flex:none}
+  header .t{flex:1 1 200px;min-width:0}
+  header h1{font-size:16px;margin:0}
+  header small{display:block;opacity:.85;font-size:11.5px}
+  .langsw{display:inline-flex;border:1px solid rgba(238,238,222,.6);border-radius:8px;overflow:hidden;flex:none}
+  .langsw button{background:transparent;color:var(--cream);border:0;border-radius:0;padding:0 14px;min-height:44px;min-width:50px;
+    font-weight:700;font-size:14px;letter-spacing:.05em}
+  .langsw button[aria-pressed="true"]{background:var(--yellow);color:var(--green)}
+  main{max-width:1180px;margin:0 auto;padding:14px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--olive);margin:0 0 8px}
+  h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--olive);margin:14px 0 6px}
+  h3.first{margin-top:0}
+  h3 .note{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
+  button{cursor:pointer;font:inherit;border:0;border-radius:8px;padding:8px 14px;background:var(--green);
+    color:var(--cream);font-weight:600;min-height:44px}
+  button.ghost{background:transparent;color:var(--green);border:1px solid var(--green)}
+  button.small{min-height:36px;padding:4px 12px;font-size:13px}
+  button:disabled{opacity:.5;cursor:default}
+  input{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--white);
+    width:100%;min-height:44px}
+  a{color:#1d5a9e}
+  a.btnlink{display:inline-flex;align-items:center;min-height:36px;padding:4px 12px;border:1px solid var(--green);border-radius:8px;
+    color:var(--green);font-weight:600;font-size:13px;text-decoration:none}
+  .login{max-width:380px;margin:40px auto}
+  .login form{display:flex;flex-direction:column;gap:10px}
+  .login p{margin:10px 0 0;font-size:13px}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .bar .grow{flex:1 1 200px;color:var(--muted);font-size:13px}
+  .bar .find{flex:1 1 220px;max-width:340px}
+  #msg{font-size:13.5px;margin:0 0 10px;min-height:1em}
+  #msg.bad{color:var(--bad)}
+  .muted{color:var(--muted)}
+  .flag{display:inline-block;font-size:11px;font-weight:700;color:#8a4a1a;background:#f2ddd0;border-radius:10px;padding:0 7px;margin-left:6px}
+  .ok{color:var(--good);font-weight:600}
+
+  .tbl{width:100%;border-collapse:collapse;background:var(--white);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--olive);
+    padding:8px 10px;border-bottom:1px solid var(--line);background:var(--cream)}
+  .tbl td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top;overflow-wrap:anywhere}
+  .tbl td.acts{white-space:nowrap}
+  .tbl td.acts button{margin-right:6px}
+  tr.detail td{background:#f4f4e8}
+  .detail-body{padding:4px 2px}
+  .cols{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  .cols > div{flex:1 1 300px;min-width:0}
+  .kv{display:flex;gap:8px;padding:2px 0;font-size:13.5px}
+  .kv .k{flex:0 0 160px;color:var(--muted)}
+  .kv .v{flex:1;min-width:0;overflow-wrap:anywhere}
+  .sec{margin-bottom:10px}
+  .entry{border-left:3px solid var(--line);padding-left:10px;margin:6px 0}
+  .entry-n{font-size:11px;color:var(--olive);font-weight:700}
+  .bsvg{width:260px;max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:var(--white);margin-top:6px}
+  .notes{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px}
+  .photos{display:flex;gap:8px;flex-wrap:wrap}
+  .photos img{width:130px;height:130px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:zoom-in}
+  .photos img.big{width:min(100%,640px);height:auto;object-fit:contain;cursor:zoom-out}
+  .sug{border:1px solid #cfd9b4;background:#f3f7e6;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13.5px}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+
+  @media (max-width:1000px){
+    .tbl thead{display:none}
+    .tbl, .tbl tbody, .tbl tr, .tbl td{display:block;width:100%}
+    .tbl tr.row{border-bottom:1px solid var(--line);padding:6px 0}
+    .tbl td{border:0;padding:3px 10px;display:flex;gap:8px}
+    .tbl td::before{content:attr(data-label);flex:0 0 110px;color:var(--muted);font-size:11px;
+      text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+    .tbl td:empty{display:none}
+    .tbl td.acts{padding:8px 10px;flex-wrap:wrap}
+    .tbl td.acts::before{content:none}
+    tr.detail td{display:block}
+    tr.detail td::before{content:none}
+    .kv .k{flex-basis:120px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <div class="t">
+    <h1>Adams Grain Company</h1>
+    <small><span data-l="en">Grower survey submissions</span><span data-l="es">Encuestas de productores recibidas</span></small>
+  </div>
+  <div class="langsw" role="group" aria-label="Language / Idioma">
+    <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
+    <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+  </div>
+</header>
+<main>
+  <section id="login" class="card login" hidden>
+    <h2><span data-l="en">Sign in</span><span data-l="es">Ingresar</span></h2>
+    <form id="loginForm" autocomplete="on">
+      <input id="pw" type="password" data-ph-en="Admin password" data-ph-es="Contraseña de administrador" placeholder="Admin password" autocomplete="current-password" required>
+      <button type="submit" id="loginBtn"><span data-l="en">Sign in</span><span data-l="es">Ingresar</span></button>
+    </form>
+    <p id="loginMsg" class="muted"></p>
+  </section>
+
+  <section id="app" hidden>
+    <div class="bar">
+      <span class="grow" id="count"></span>
+      <input class="find" id="find" type="search" data-ph-en="Search farm, field, contact, buyer, country" data-ph-es="Buscar finca, campo, contacto, comprador, país" placeholder="Search farm, field, contact, buyer, country" aria-label="Search">
+      <button class="ghost" id="csv" type="button"><span data-l="en">Export list (CSV)</span><span data-l="es">Exportar lista (CSV)</span></button>
+      <button class="ghost" id="refresh" type="button"><span data-l="en">Refresh</span><span data-l="es">Actualizar</span></button>
+      <button class="ghost" id="signout" type="button"><span data-l="en">Sign out</span><span data-l="es">Cerrar sesión</span></button>
+    </div>
+    <p id="msg" role="status"></p>
+    <div id="list"></div>
+    <div class="bar"><button class="ghost" id="more" type="button" hidden><span data-l="en">Load older submissions</span><span data-l="es">Cargar envíos anteriores</span></button></div>
+  </section>
+</main>
+
+<script>
+'use strict';
+const LABELS = [{"id":"farm","title":"About your farm","titleEs":"Sobre su finca","repeatable":false,"itemLabel":null,"itemLabelEs":null,"group":null,"fields":[{"id":"certification","q":"Certifications (tick all that apply)","qEs":"Certificaciones (marque todas las que tenga)","kind":"multi","opt":{"GAP (Good Agricultural Practices)":"GAP (Buenas Prácticas Agrícolas)","EU Organic":"Orgánico UE","Organic (other national standard)":"Orgánico (otra norma nacional)","In transition to organic":"En transición a orgánico","Fair Trade / Fair for Life":"Comercio Justo / Fair for Life","RTRS (responsible soy)":"RTRS (soja responsable)","Other":"Otra","None":"Ninguna"}},{"id":"certificationOther","q":"If other, which certification?","qEs":"Si es otra, ¿cuál?","kind":"text","opt":null},{"id":"certifier","q":"Certifier(s) (if you have one)","qEs":"Certificadora(s) (si tiene)","kind":"text","opt":null},{"id":"farmSize","q":"Total farm size","qEs":"Superficie total de la finca","kind":"numberUnit","opt":null},{"id":"fieldCount","q":"Number of fields","qEs":"Cantidad de lotes","kind":"number","opt":null},{"id":"delivered","q":"Roughly how much of this crop did you sell to Adams or your exporter that season? (optional)","qEs":"Más o menos, ¿cuánto de este cultivo vendió a Adams o a su exportador en esa campaña? (opcional)","kind":"numberUnit","opt":{"tonne":"tonelada (t)","lb":"libra (lb)","bushel":"bushel (bu)"}},{"id":"mailing","q":"Mailing address (optional)","qEs":"Dirección postal (opcional)","kind":"text","opt":null}]},{"id":"cropsoil","title":"Crop & Soil","titleEs":"Cultivo y suelo","repeatable":false,"itemLabel":null,"itemLabelEs":null,"group":null,"fields":[{"id":"assessYear","q":"Which harvest are you describing?","qEs":"¿De qué cosecha nos va a hablar?","kind":"select","opt":null},{"id":"crop","q":"Crop you are describing","qEs":"Cultivo del que nos va a hablar","kind":"select","opt":{"Soybean":"Soja (soya)","Safflower":"Cártamo","Sunflower":"Girasol","Other":"Otro"}},{"id":"cropOther","q":"If other, which crop?","qEs":"Si es otro, ¿cuál?","kind":"text","opt":null},{"id":"variety","q":"Variety or hybrid (if you know it)","qEs":"Variedad o híbrido (si lo sabe)","kind":"text","opt":null},{"id":"plantDate","q":"Planting date","qEs":"Fecha de siembra","kind":"date","opt":null},{"id":"harvestDate","q":"Harvest date","qEs":"Fecha de cosecha","kind":"date","opt":null},{"id":"previousCrop","q":"Crop that was on this field just before (for example wheat, or fallow)","qEs":"Cultivo que hubo en este lote justo antes (por ejemplo trigo, o barbecho)","kind":"text","opt":null},{"id":"growingArea","q":"Growing area of this field","qEs":"Superficie cultivada de este lote","kind":"numberUnit","opt":null},{"id":"totalHarvest","q":"Total harvest from this field","qEs":"Cosecha total de este lote","kind":"numberUnit","opt":{"tonne":"tonelada (t)","lb":"libra (lb)","bushel":"bushel (bu)"}},{"id":"residueMgmt","q":"What do you do with the crop residue after harvest?","qEs":"¿Qué hace con el rastrojo después de la cosecha?","kind":"select","opt":{"Removed; left untreated in heaps or pits":"Retirado; dejado sin tratar en montones o fosas","Removed; non-Forced Aeration Compost":"Retirado; compost sin aireación forzada","Removed; Forced Aeration Compost":"Retirado; compost con aireación forzada","Left distributed on field, OR incorporated, OR mulched":"Dejado en el lote (esparcido, incorporado al suelo o sobre la superficie)","Burned in field":"Quemado en el lote","Removed from field for use or sale":"Retirado del lote para uso o venta","Rice straw incorporation more than 30 days before cultivation":"Incorporación de paja de arroz más de 30 días antes de la siembra","Rice straw incorporation less than 30 days before cultivation":"Incorporación de paja de arroz menos de 30 días antes de la siembra"}},{"id":"residueDry","q":"Residue left, dry weight (only if you know it)","qEs":"Rastrojo que dejó en el lote, peso seco (solo si lo sabe)","kind":"text","opt":null},{"id":"country","q":"Country where the farm is located","qEs":"País donde está la finca","kind":"text","opt":null},{"id":"soilType","q":"Soil type","qEs":"Tipo de suelo","kind":"text","opt":null}]},{"id":"fert","title":"Fertilizer","titleEs":"Fertilizante","repeatable":true,"itemLabel":"Fertilizer application","itemLabelEs":"Aplicación de fertilizante","group":null,"fields":[{"id":"type","q":"Fertilizer type","qEs":"Tipo de fertilizante","kind":"select","opt":null},{"id":"region","q":"Where the fertilizer was made (country or region, if you know)","qEs":"Dónde se fabricó el fertilizante (país o región, si lo sabe)","kind":"text","opt":null},{"id":"method","q":"How it was applied","qEs":"Cómo se aplicó","kind":"select","opt":{"Broadcast (spread on the surface)":"Al voleo (esparcido en la superficie)","Broadcast, then worked into the soil":"Al voleo y luego incorporado al suelo","Injected or knifed into the soil":"Inyectado en el suelo (con cuchillas o púas)","Banded or side-dressed":"En banda o al costado de la hilera","Through the irrigation water (fertigation)":"Con el agua de riego (fertirriego)","Foliar spray":"Aplicación foliar (sobre las hojas)"}},{"id":"methodOther","q":"If your method is not listed, describe it","qEs":"Si su método no está en la lista, descríbalo","kind":"text","opt":null},{"id":"pctAmmonium","q":"%N as ammonium","qEs":"%N como amonio","kind":"percent","opt":null},{"id":"pctNitrate","q":"%N as nitrate","qEs":"%N como nitrato","kind":"percent","opt":null},{"id":"pctUrea","q":"%N as urea","qEs":"%N como urea","kind":"percent","opt":null},{"id":"pctP2O5","q":"%P2O5 (phosphorus)","qEs":"%P2O5 (fósforo)","kind":"percent","opt":null},{"id":"pctK2O","q":"%K2O (potassium)","qEs":"%K2O (potasio)","kind":"percent","opt":null},{"id":"rate","q":"Application rate","qEs":"Dosis de aplicación","kind":"numberUnit","opt":{"tonne/ha":"t/ha","tonne/acre":"t/acre"}},{"id":"appDate","q":"Date of application","qEs":"Fecha de aplicación","kind":"date","opt":null},{"id":"inhibitor","q":"Nitrification inhibitor","qEs":"Inhibidor de nitrificación","kind":"tick","opt":null}]},{"id":"irrigation","title":"Irrigation","titleEs":"Riego","repeatable":true,"itemLabel":"Irrigation system","itemLabelEs":"Sistema de riego","group":null,"fields":[{"id":"method","q":"Method","qEs":"Método","kind":"select","opt":{"Pivot":"Pivote central","Rain gun":"Cañón o aspersor grande","Flooding":"Inundación o riego por surcos","Drip":"Goteo"}},{"id":"source","q":"Water source","qEs":"Fuente de agua","kind":"select","opt":{"Natural lake/pond":"Laguna o lago natural","Reservoir":"Embalse, represa o presa","River/ Stream/ditch":"Río, arroyo, canal o acequia","On farm Storage pond/reervoir/tank":"Estanque, tajamar, reservorio o tanque en la finca","Borehole/well":"Pozo","Main supply":"Red pública o suministro municipal"}},{"id":"power","q":"What powers the pump","qEs":"Con qué funciona la bomba","kind":"select","opt":{"Electric":"Eléctrica","Diesel (average biofuel blend)":"Diésel o gasoil común (con la mezcla de biocombustible habitual)","Diesel (100% mineral diesel)":"Diésel o gasoil 100% mineral (sin biocombustible)","Gravity":"Por gravedad (sin bomba)"}},{"id":"pctIrrigated","q":"% of the field irrigated","qEs":"% del lote regado","kind":"percent","opt":null},{"id":"methodology","q":"How detailed your water numbers are","qEs":"Qué tan detallados son sus datos de agua","kind":"select","opt":{"Volume, pumping depth & distance":"Volumen, con profundidad de bombeo y distancia","Volume only":"Solo volumen"}},{"id":"totalWater","q":"Total water applied","qEs":"Agua total aplicada","kind":"numberUnit","opt":{"litre":"litro","acre-in":"acre-pulgada","acre-ft":"acre-pie","mm":"mm (lámina de riego)"}},{"id":"pumpDepth","q":"How far the pump lifts the water (well depth or height, in meters or feet)","qEs":"Cuánto sube la bomba el agua (profundidad del pozo o altura, en metros o pies)","kind":"text","opt":null},{"id":"horizDist","q":"How far the water is pumped sideways (pipe or canal length)","qEs":"Qué tan lejos se bombea el agua en horizontal (largo de cañería o canal)","kind":"text","opt":null}]},{"id":"pesticide","title":"Pesticides","titleEs":"Plaguicidas (agroquímicos)","repeatable":true,"itemLabel":"Pesticide application","itemLabelEs":"Aplicación de plaguicida","group":null,"fields":[{"id":"productName","q":"Product name (from the label)","qEs":"Nombre del producto (según la etiqueta)","kind":"text","opt":null},{"id":"category","q":"When it was used","qEs":"Cuándo se usó","kind":"select","opt":{"Seed treatment":"Tratamiento de semilla","Soil treatment":"Tratamiento de suelo","Post-emergence":"Posemergencia"}},{"id":"type","q":"Type","qEs":"Tipo","kind":"select","opt":{"Pesticide":"Plaguicida","Fungicide":"Fungicida","Herbicide":"Herbicida","Insecticide":"Insecticida"}},{"id":"pctApplied","q":"% of the field it was applied to","qEs":"% del lote donde se aplicó","kind":"percent","opt":null},{"id":"rate","q":"Application rate","qEs":"Dosis de aplicación","kind":"numberUnit","opt":{"tonne/ha":"t/ha","tonne/acre":"t/acre"}},{"id":"passes","q":"Number of times applied","qEs":"Cantidad de veces que se aplicó","kind":"number","opt":null},{"id":"activeIngred","q":"Active ingredient (% of the product), optional","qEs":"Principio activo (% del producto), opcional","kind":"percent","opt":null}]},{"id":"machine","title":"Machines and field passes","titleEs":"Maquinaria y pasadas por el lote","repeatable":true,"itemLabel":"Machine pass","itemLabelEs":"Pasada de maquinaria","group":null,"fields":[{"id":"type","q":"Machine type","qEs":"Tipo de máquina","kind":"select","opt":null},{"id":"fuel","q":"Fuel type","qEs":"Tipo de combustible","kind":"select","opt":{"diesel (average biofuel blend)":"Diésel o gasoil común (con la mezcla de biocombustible habitual)","petrol (average biofuel blend)":"Gasolina o nafta común (con la mezcla de biocombustible habitual)","petrol (100% mineral petrol)":"Gasolina o nafta 100% mineral (sin biocombustible)","diesel (100% mineral diesel)":"Diésel o gasoil 100% mineral (sin biocombustible)"}},{"id":"ops","q":"Number of operations","qEs":"Cantidad de pasadas","kind":"number","opt":null},{"id":"label","q":"Label (optional)","qEs":"Nombre para identificarla (opcional)","kind":"text","opt":null}]},{"id":"soilpractices","title":"Soil practices","titleEs":"Prácticas de suelo","repeatable":false,"itemLabel":null,"itemLabelEs":null,"group":null,"fields":[{"id":"tillage","q":"Tillage system","qEs":"Sistema de labranza","kind":"select","opt":{"No-till":"Siembra directa (sin labranza)","Reduced tillage (strip-till, minimum-till, one light pass)":"Labranza reducida (en franjas, mínima o una pasada liviana)","Full tillage (plow or disk, several passes)":"Labranza convencional (arado o rastra, varias pasadas)"}},{"id":"tillagePasses","q":"Tillage passes before planting","qEs":"Pasadas de labranza antes de sembrar","kind":"number","opt":null},{"id":"coverCrop","q":"Cover crop","qEs":"Cultivo de cobertura","kind":"select","opt":{"No cover crop":"No sembré cultivo de cobertura","Yes":"Sí, sembré cultivo de cobertura"}},{"id":"coverSpecies","q":"Cover crop species or mix","qEs":"Especies o mezcla del cultivo de cobertura","kind":"text","opt":null},{"id":"coverPlantDate","q":"Cover crop planted","qEs":"Fecha de siembra del cultivo de cobertura","kind":"date","opt":null},{"id":"coverEndDate","q":"Cover crop ended","qEs":"Fecha en que terminó el cultivo de cobertura","kind":"date","opt":null},{"id":"coverEndMethod","q":"How the cover crop was ended","qEs":"Cómo se terminó el cultivo de cobertura","kind":"select","opt":{"Rolled or crimped":"Rolado o aplastado","Mowed":"Cortado con segadora","Tilled in":"Incorporado con labranza","Herbicide":"Con herbicida","Grazed":"Pastoreado por animales","Killed by frost":"Muerto por heladas","Harvested for hay or silage":"Cosechado para heno o ensilaje"}}]},{"id":"landchange","title":"Land use change","titleEs":"Cambio de uso del suelo","repeatable":true,"itemLabel":"Land use change","itemLabelEs":"Cambio de uso del suelo","group":null,"fields":[{"id":"yearChange","q":"Year of change","qEs":"Año del cambio","kind":"select","opt":null},{"id":"landFrom","q":"Land use before","qEs":"Uso del suelo antes","kind":"select","opt":{"Cultivated":"Cultivado","Paddy":"Arrozal","Perennial":"Perenne (pastura, alfalfa, frutales, viñedo)","Set-aside":"En descanso","Native Grassland":"Pastizal nativo","Native Forest":"Bosque o monte nativo"}},{"id":"landTo","q":"Land use after","qEs":"Uso del suelo después","kind":"select","opt":{"Cultivated":"Cultivado","Paddy":"Arrozal","Perennial":"Perenne (pastura, alfalfa, frutales, viñedo)","Set-aside":"En descanso","Native Grassland":"Pastizal nativo","Native Forest":"Bosque o monte nativo"}},{"id":"tillageChange","q":"Tillage","qEs":"Labranza","kind":"select","opt":{"Full":"Convencional","Reduced":"Reducida","No-till":"Sin labranza"}},{"id":"carbonFrom","q":"Carbon inputs before","qEs":"Aportes de carbono antes","kind":"select","opt":{"High C input without manure":"Alto aporte de carbono sin estiércol","High C input with manure":"Alto aporte de carbono con estiércol","Medium C input":"Aporte medio de carbono","Low C input":"Aporte bajo de carbono"}},{"id":"carbonTo","q":"Carbon inputs after","qEs":"Aportes de carbono después","kind":"select","opt":{"High C input without manure":"Alto aporte de carbono sin estiércol","High C input with manure":"Alto aporte de carbono con estiércol","Medium C input":"Aporte medio de carbono","Low C input":"Aporte bajo de carbono"}},{"id":"pctAffected","q":"% of the field the change applies to","qEs":"% del lote que cambió de uso","kind":"percent","opt":null},{"id":"areaAffected","q":"Area the change applies to","qEs":"Superficie a la que aplica el cambio","kind":"numberUnit","opt":null}]},{"id":"seedplugs","title":"Seed","titleEs":"Semilla","repeatable":false,"itemLabel":null,"itemLabelEs":null,"group":null,"fields":[{"id":"purchaseType","q":"What you bought to plant this crop","qEs":"Qué compró para sembrar este cultivo","kind":"select","opt":{"Plugs":"Plantines o plántulas (plugs)","Seed":"Semilla"}},{"id":"plugCount","q":"Number of plugs bought","qEs":"Cantidad de plantines comprados","kind":"number","opt":null},{"id":"plugPeat","q":"Plugs came in peat soil?","qEs":"¿Los plantines venían en turba?","kind":"tick","opt":null},{"id":"seedMass","q":"Amount of seed","qEs":"Cantidad de semilla","kind":"text","opt":null},{"id":"seedSource","q":"Seed source","qEs":"Origen de la semilla","kind":"select","opt":{"Hybrid seed (from breeder)":"Semilla híbrida (de la empresa semillera)","Single variety":"Variedad única (no híbrida)"}}]},{"id":"energy","title":"Energy","titleEs":"Energía","repeatable":true,"itemLabel":"Energy source","itemLabelEs":"Fuente de energía","group":"optional","fields":[{"id":"source","q":"Energy source","qEs":"Fuente de energía","kind":"text","opt":null},{"id":"used","q":"Energy used","qEs":"Energía utilizada","kind":"text","opt":null},{"id":"boundary","q":"Where it was used","qEs":"Dónde se usó","kind":"text","opt":null},{"id":"category","q":"Field or facility?","qEs":"¿Campo o instalación?","kind":"select","opt":{"Field":"Campo","Facility (Processing)":"Instalación (galpón o planta)"}}]},{"id":"transport","title":"Transport","titleEs":"Transporte","repeatable":true,"itemLabel":"Transport leg","itemLabelEs":"Tramo de transporte","group":"optional","fields":[{"id":"type","q":"Type of transport","qEs":"Tipo de transporte","kind":"text","opt":null},{"id":"boundary","q":"Direction","qEs":"Hacia dónde va","kind":"select","opt":{"Incoming":"Llega a la finca","Within Farm":"Dentro de la finca","Dispatched":"Sale de la finca"}},{"id":"weight","q":"Weight carried","qEs":"Peso transportado","kind":"text","opt":null},{"id":"distance","q":"Distance","qEs":"Distancia","kind":"text","opt":null},{"id":"label","q":"Label (optional)","qEs":"Nombre para identificarlo (opcional)","kind":"text","opt":null}]},{"id":"intercrop","title":"Intercrop","titleEs":"Cultivo intercalado","repeatable":true,"itemLabel":"Intercrop","itemLabelEs":"Cultivo intercalado","group":"optional","fields":[{"id":"type","q":"Second crop","qEs":"Segundo cultivo","kind":"text","opt":null},{"id":"pctOccupied","q":"% of the field it occupied","qEs":"% del lote que ocupó","kind":"percent","opt":null},{"id":"density","q":"Planting density","qEs":"Densidad de siembra","kind":"text","opt":null}]},{"id":"hedge","title":"Hedgerows and living fences","titleEs":"Cercos vivos y cortinas rompevientos","repeatable":true,"itemLabel":"Hedgerow","itemLabelEs":"Cerco vivo","group":"optional","fields":[{"id":"type","q":"What it is made of","qEs":"De qué está hecho","kind":"text","opt":null},{"id":"width","q":"Width","qEs":"Ancho","kind":"text","opt":null},{"id":"length","q":"Length","qEs":"Largo","kind":"text","opt":null}]},{"id":"wastewater","title":"Waste water","titleEs":"Aguas residuales","repeatable":false,"itemLabel":null,"itemLabelEs":null,"group":"optional","fields":[{"id":"volume","q":"Waste water volume","qEs":"Volumen de aguas residuales","kind":"text","opt":null},{"id":"oxygenDemand","q":"Oxygen demand","qEs":"Demanda de oxígeno","kind":"number","opt":null},{"id":"oxygenType","q":"Type of oxygen demand","qEs":"Tipo de demanda de oxígeno","kind":"select","opt":{"Biochemical":"Bioquímica (DBO)","Chemical":"Química (DQO)"}},{"id":"treatment","q":"How the water is treated","qEs":"Cómo se trata el agua","kind":"text","opt":null}]},{"id":"refrig","title":"Refrigerants","titleEs":"Refrigerantes","repeatable":true,"itemLabel":"Refrigeration unit","itemLabelEs":"Unidad de refrigeración","group":"optional","fields":[{"id":"equipType","q":"Type of equipment","qEs":"Tipo de equipo","kind":"text","opt":null},{"id":"count","q":"Number of identical units (same age)","qEs":"Cantidad de unidades iguales (de la misma edad)","kind":"number","opt":null},{"id":"refrigType","q":"Refrigerant type","qEs":"Tipo de refrigerante","kind":"text","opt":null},{"id":"age","q":"Age of the equipment (years)","qEs":"Antigüedad del equipo (años)","kind":"number","opt":null},{"id":"disposed","q":"Disposed of during the year you are reporting?","qEs":"¿Se desechó durante el año que está reportando?","kind":"tick","opt":null},{"id":"pathway","q":"What happened to the refrigerant when it was disposed of","qEs":"Qué pasó con el refrigerante al desechar el equipo","kind":"text","opt":null},{"id":"amount","q":"Refrigerant amount when new","qEs":"Cantidad de refrigerante cuando era nuevo","kind":"text","opt":null},{"id":"allocMethod","q":"How its share for this field is worked out","qEs":"Cómo se calcula la parte que corresponde a este lote","kind":"text","opt":null},{"id":"allocPct","q":"% of the equipment used for this field","qEs":"% del equipo que se usa para este lote","kind":"percent","opt":null}]}];
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const KEY = 'adams-admin-pw';
+const LANG_KEY = 'adams-survey-lang'; // same key as the survey page (same origin), so the choice carries over
+let LANG = document.documentElement.lang === 'es' ? 'es' : 'en';
+const T = (en, es) => (LANG === 'es' && es) ? es : en;
+let pw = '';
+try { pw = sessionStorage.getItem(KEY) || ''; } catch {}
+const loaded = new Map();
+const openIds = new Set();
+let allRows = [], total = 0, hasMore = false, busy = false;
+let msgState = null, loginState = null; // {en, es, bad}: kept as pairs so a language switch can repaint them
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+const clip = (s, n) => { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '…' : s; };
+function fmtTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString(LANG === 'es' ? 'es-US' : 'en-US', {timeZone: 'America/Los_Angeles', year: 'numeric', month: 'short',
+    day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'});
+}
+function pretty(k) {
+  return String(k).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase());
+}
+function safeName(s) {
+  return String(s || 'survey').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\- ]/g, '')
+    .trim().replace(/\s+/g, '_').slice(0, 60) || 'survey';
+}
+function paintMsg() {
+  const el = $('#msg');
+  el.textContent = msgState ? T(msgState.en, msgState.es) : '';
+  el.className = msgState && msgState.bad ? 'bad' : '';
+}
+function setMsg(en, es, bad) { msgState = en ? {en, es, bad} : null; paintMsg(); }
+function paintLogin() { $('#loginMsg').textContent = loginState ? T(loginState.en, loginState.es) : ''; }
+function download(name, text, mime) {
+  const url = URL.createObjectURL(new Blob([text], {type: mime}));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+const PHOTO_RE = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+const validPhotos = p => (Array.isArray(p) ? p : []).filter(x => x && typeof x.dataUri === 'string' && PHOTO_RE.test(x.dataUri));
+const validEmail = e => typeof e === 'string' && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/.test(e);
+
+function friendly(err) {
+  const c = err && err.code;
+  if (c === 401) return {en: 'Wrong password.', es: 'Contraseña incorrecta.'};
+  if (c === 503) return {en: 'The admin password has not been set up on the server yet.', es: 'La contraseña de administrador todavía no está configurada en el servidor.'};
+  if (c === 'net') return {en: 'No connection. Check your internet and try again.', es: 'Sin conexión. Revise su internet e intente de nuevo.'};
+  if (c >= 500) return {en: 'The server had a problem. Wait a moment and try again.', es: 'El servidor tuvo un problema. Espere un momento e intente de nuevo.'};
+  const m = (err && err.message) || 'unknown';
+  return {en: 'Something went wrong (' + m + ').', es: 'Algo salió mal (' + m + ').'};
+}
+async function api(query) {
+  let r;
+  try { r = await fetch('/api/submissions' + (query || ''), {headers: {Authorization: 'Bearer ' + pw}, cache: 'no-store'}); }
+  catch { const e = new Error('offline'); e.code = 'net'; throw e; }
+  let j = null;
+  try { j = await r.json(); } catch {}
+  if (!r.ok || !j || !j.ok) { const e = new Error((j && j.error) || ('HTTP ' + r.status)); e.code = r.status; throw e; }
+  return j;
+}
+async function getSub(id) {
+  if (loaded.has(id)) return loaded.get(id);
+  const j = await api('?id=' + encodeURIComponent(id));
+  loaded.set(id, j.submission);
+  return j.submission;
+}
+function setBusy(on) {
+  busy = on;
+  for (const id of ['refresh', 'more', 'csv']) { const el = document.getElementById(id); if (el) el.disabled = on; }
+}
+
+// ---- list ---------------------------------------------------------------------------------------
+const rowText = r => [r.farm_name, r.field_name, r.contact_name, r.buyer, r.country, r.crop, r.phone].join(' ').toLowerCase();
+function rowHtml(r) {
+  const id = Number(r.id);
+  const photos = Number(r.photo_count) || 0, extra = Number(r.extra_fields) || 0;
+  const open = openIds.has(id);
+  return `<tr class="row" data-id="${id}">
+    <td data-label="#">${id}</td>
+    <td data-label="${esc(T('Submitted', 'Enviado'))}">${esc(fmtTime(r.submitted_at))}</td>
+    <td data-label="${esc(T('Grower / farm', 'Productor / finca'))}"><strong>${esc(r.farm_name)}</strong></td>
+    <td data-label="${esc(T('Field', 'Campo'))}">${esc(r.field_name)}</td>
+    <td data-label="${esc(T('Contact', 'Contacto'))}">${esc(r.contact_name)}</td>
+    <td data-label="${esc(T('Phone', 'Teléfono'))}">${esc(r.phone)}</td>
+    <td data-label="${esc(T('Buyer', 'Comprador'))}">${esc(r.buyer)}</td>
+    <td data-label="${esc(T('Country', 'País'))}">${esc(r.country)}</td>
+    <td data-label="${esc(T('Crop', 'Cultivo'))}">${esc(r.crop)}</td>
+    <td data-label="${esc(T('Acres', 'Acres'))}">${esc(r.acres)}</td>
+    <td data-label="${esc(T('Photos / extra', 'Fotos / extras'))}">${photos} / ${extra}</td>
+    <td class="acts"><button class="ghost small" type="button" data-act="view">${esc(open ? T('Hide', 'Ocultar') : T('View', 'Ver'))}</button><button class="ghost small" type="button" data-act="json">${esc(T('Download JSON', 'Descargar JSON'))}</button></td>
+  </tr>
+  <tr class="detail" id="detail-${id}"${open ? '' : ' hidden'}><td colspan="12"><div class="detail-body">${open && loaded.has(id) ? renderDetail(loaded.get(id)) : esc(T('Loading…', 'Cargando…'))}</div></td></tr>`;
+}
+function visibleRows() {
+  const q = $('#find').value.trim().toLowerCase();
+  return q ? allRows.filter(r => rowText(r).includes(q)) : allRows;
+}
+function renderList() {
+  const rows = visibleRows();
+  const q = $('#find').value.trim();
+  if (total) {
+    $('#count').textContent = LANG === 'es'
+      ? `${allRows.length} de ${total} envío${total === 1 ? '' : 's'} cargado${allRows.length === 1 ? '' : 's'}${q ? `, ${rows.length} coinciden` : ''}, del más reciente al más antiguo (horas del Pacífico)`
+      : `${allRows.length} of ${total} submission${total === 1 ? '' : 's'} loaded${q ? `, ${rows.length} match` : ''}, newest first (times in Pacific)`;
+  } else $('#count').textContent = T('No submissions yet.', 'Todavía no hay envíos.');
+  const th = [['#', '#'], ['Submitted', 'Enviado'], ['Grower / farm', 'Productor / finca'], ['Field', 'Campo'], ['Contact', 'Contacto'], ['Phone', 'Teléfono'],
+    ['Buyer', 'Comprador'], ['Country', 'País'], ['Crop', 'Cultivo'], ['Acres', 'Acres'], ['Photos / extra', 'Fotos / extras']];
+  $('#list').innerHTML = rows.length
+    ? `<table class="tbl"><thead><tr>${th.map(h => `<th>${esc(T(h[0], h[1]))}</th>`).join('')}<th></th></tr></thead>
+       <tbody>${rows.map(rowHtml).join('')}</tbody></table>`
+    : (allRows.length ? `<p class="muted">${esc(T('Nothing matches that search.', 'Nada coincide con esa búsqueda.'))}</p>` : '');
+  $('#more').hidden = !hasMore;
+}
+
+// ---- one submission -----------------------------------------------------------------------------
+const SECTION_INDEX = new Map(LABELS.map(s => [s.id, s]));
+const optLabel = (f, v) => (LANG === 'es' && f && f.opt && Object.prototype.hasOwnProperty.call(f.opt, v)) ? f.opt[v] : v;
+function valHtml(v, f) {
+  if (v === true) return esc(T('Yes', 'Sí'));
+  if (v && typeof v === 'object') {
+    if ('amount' in v || 'unit' in v) {
+      const t = [v.amount, optLabel(f, v.unit)].filter(x => x !== '' && x != null).join(' ');
+      return esc(clip(t, 200)) + (v.ext ? `<span class="flag" title="${esc(T('This unit is not in the FieldScope list. Convert it before preparing the FieldScope file.', 'Esta unidad no está en la lista de FieldScope. Conviértala antes de preparar el archivo de FieldScope.'))}">${esc(T('unit needs converting', 'unidad por convertir'))}</span>` : '');
+    }
+    return esc(clip(JSON.stringify(v), 300));
+  }
+  if (f && f.kind === 'multi' && typeof v === 'string') return esc(clip(v.split('; ').map(x => optLabel(f, x)).join('; '), 2000));
+  return esc(clip(optLabel(f, v), 2000));
+}
+function kv(k, vHtml) { return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${vHtml}</span></div>`; }
+function entryHtml(sec, e) {
+  if (!e || typeof e !== 'object') return kv(T('Value', 'Valor'), valHtml(e, null));
+  const known = sec ? sec.fields : [];
+  const seen = new Set();
+  let out = '';
+  for (const f of known) if (e[f.id] !== undefined) { seen.add(f.id); out += kv(T(f.q, f.qEs), valHtml(e[f.id], f)); }
+  for (const [k, v] of Object.entries(e)) if (!seen.has(k)) out += kv(pretty(k), valHtml(v, null));
+  return out;
+}
+function answersHtml(answers, none) {
+  const a = answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
+  const nn = none && typeof none === 'object' ? none : {};
+  const ids = [...LABELS.map(s => s.id).filter(id => a[id] !== undefined || nn[id]),
+    ...Object.keys(a).filter(id => !SECTION_INDEX.has(id))];
+  if (!ids.length) return `<p class="muted">${esc(T('No practice answers were filled in.', 'No se llenó ninguna respuesta sobre prácticas.'))}</p>`;
+  return ids.map(id => {
+    const sec = SECTION_INDEX.get(id);
+    const title = sec ? T(sec.title, sec.titleEs) : pretty(id);
+    if (nn[id] && a[id] === undefined) return `<div class="sec"><h3>${esc(title)}</h3><p class="ok">${esc(T('Grower ticked: none applied', 'El productor marcó: no aplicó'))}</p></div>`;
+    const entry = a[id];
+    const list = (Array.isArray(entry) ? entry : [entry]).slice(0, 100);
+    const body = list.map((e, i) =>
+      `<div class="entry">${list.length > 1 ? `<div class="entry-n">#${i + 1}</div>` : ''}${entryHtml(sec, e)}</div>`).join('');
+    return `<div class="sec"><h3>${esc(title)}</h3>${body}</div>`;
+  }).join('');
+}
+function cleanRing(ring) {
+  return (Array.isArray(ring) ? ring : []).filter(p => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1])).slice(0, 5000).map(p => [+p[0], +p[1]]);
+}
+function bounds(pts) {
+  let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+  for (const p of pts) { if (p[0] < minx) minx = p[0]; if (p[0] > maxx) maxx = p[0]; if (p[1] < miny) miny = p[1]; if (p[1] > maxy) maxy = p[1]; }
+  return {minx, maxx, miny, maxy};
+}
+function boundarySvg(pts) {
+  if (pts.length < 3) return '';
+  const {minx, maxx, miny, maxy} = bounds(pts);
+  const W = 260, H = 190, pad = 10;
+  const k = Math.cos(((miny + maxy) / 2) * Math.PI / 180);
+  const dx = (maxx - minx) * k || 1e-9, dy = (maxy - miny) || 1e-9;
+  const s = Math.min((W - 2 * pad) / dx, (H - 2 * pad) / dy);
+  const ox = (W - dx * s) / 2, oy = (H - dy * s) / 2;
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${(ox + (p[0] - minx) * k * s).toFixed(1)},${(H - oy - (p[1] - miny) * s).toFixed(1)}`).join('') + 'Z';
+  return `<svg class="bsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(T('Field boundary outline', 'Contorno del límite del campo'))}">
+    <path d="${d}" fill="rgba(232,115,12,.25)" stroke="#E8730C" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+function centroid(pts) {
+  const {minx, maxx, miny, maxy} = bounds(pts);
+  return [(miny + maxy) / 2, (minx + maxx) / 2];
+}
+function photosHtml(photos) {
+  const ok = validPhotos(photos);
+  if (!ok.length) return '';
+  return `<h3>${esc(T('Photos', 'Fotos'))} (${ok.length}) <span class="note">${esc(T('click a photo to enlarge', 'toque una foto para agrandarla'))}</span></h3>
+    <div class="photos">${ok.map(p => `<img src="${esc(p.dataUri)}" alt="${esc(clip(p.filename || 'photo', 80))}" loading="lazy">`).join('')}</div>`;
+}
+function suggestionsHtml(a) {
+  if (!a || typeof a !== 'object') return '';
+  const acc = a.accepted && typeof a.accepted === 'object' ? a.accepted : {};
+  const accLu = Array.isArray(acc.landuse) ? acc.landuse : [];
+  const conf = c => esc(T(c + ' confidence', ({high: 'confianza alta', medium: 'confianza media', low: 'confianza baja'})[c] || c));
+  let out = `<h3>${esc(T('What the survey suggested', 'Lo que sugirió la encuesta'))} <span class="note">${esc(T('public-data estimates the grower could accept or ignore', 'estimaciones de datos públicos que el productor podía aceptar o ignorar'))}</span></h3>`;
+  if (a.soil) out += `<div class="sug"><b>${esc(T('Soil', 'Suelo'))}</b> (${esc(a.soil.source)}, ${conf(a.soil.confidence)}): ${esc(clip(a.soil.value, 200))}<br>${acc.soil ? `<span class="ok">${esc(T('Accepted by the grower', 'Aceptado por el productor'))}</span>` : esc(T('Not accepted', 'No aceptado'))}</div>`;
+  const lu = a.landuse;
+  if (lu) {
+    const sugs = Array.isArray(lu.suggestions) ? lu.suggestions : [];
+    out += `<div class="sug"><b>${esc(T('Land use', 'Uso del suelo'))}</b> (${esc(lu.source)}); ${esc(T('current state', 'estado actual'))}: ${esc(lu.currentState || T('unknown', 'desconocido'))}`;
+    out += sugs.length ? '<br>' + sugs.map(s => {
+      const key = `${s.yearChange}:${s.landFrom}>${s.landTo}`;
+      return `${esc(s.yearChange)}: ${esc(s.landFrom)} ${esc(T('to', 'a'))} ${esc(s.landTo)} (${conf(s.confidence)}) ${accLu.includes(key) ? `<span class="ok">${esc(T('accepted', 'aceptado'))}</span>` : esc(T('not accepted', 'no aceptado'))}`;
+    }).join('<br>') : `<br>${esc(T('No change detected', 'No se detectó ningún cambio'))}`;
+    out += '</div>';
+  }
+  if (!a.soil && !lu) out += `<p class="muted">${esc(T('No suggestions were available for this location.', 'No había sugerencias disponibles para este lugar.'))}</p>`;
+  return out;
+}
+function kml(name, pts) {
+  const x = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const ring = pts.length && (pts[0][0] !== pts[pts.length - 1][0] || pts[0][1] !== pts[pts.length - 1][1]) ? [...pts, pts[0]] : pts;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>${x(name)}</name><Polygon><outerBoundaryIs><LinearRing><coordinates>` +
+    ring.map(p => p.join(',')).join(' ') + `</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>`;
+}
+function renderDetail(sub) {
+  const b = sub && sub.bundle && typeof sub.bundle === 'object' ? sub.bundle : {};
+  const id = Number(sub.id);
+  const phone = String(b.phone || '');
+  const tel = phone.replace(/[^\d+]/g, '');
+  const con = b.consent && typeof b.consent === 'object' ? b.consent : null;
+  let info = '';
+  const add = (k, v) => { if (v) info += kv(k, v); };
+  add(T('Grower / farm', 'Productor / finca'), esc(clip(b.farmName, 200)));
+  add(T('Field / plot', 'Campo / parcela'), esc(clip(b.fieldName, 200)));
+  add(T('Contact', 'Contacto'), esc(clip(b.contactName, 200)));
+  add(T('Phone', 'Teléfono'), tel.length >= 5 ? `<a href="tel:${esc(tel)}">${esc(clip(phone, 60))}</a>` : esc(clip(phone, 60)));
+  add(T('Email', 'Correo electrónico'), validEmail(b.email) ? `<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>` : esc(clip(b.email, 200)));
+  add(T('Buyer / exporter', 'Comprador / exportador'), esc(clip(b.buyer, 200)));
+  add(T('Filled out by', 'Completado por'), esc(clip(b.filledBy, 200)));
+  add(T('Survey language', 'Idioma de la encuesta'), b.lang === 'es' ? esc(T('Spanish', 'Español')) : (b.lang === 'en' ? esc(T('English', 'Inglés')) : ''));
+  add(T('Consent', 'Consentimiento'), con && con.agreed
+    ? `<span class="ok">${esc(T('Agreed', 'Aceptó'))}</span> (${esc(clip(con.version, 40))}${con.at ? ', ' + esc(fmtTime(con.at)) : ''})`
+    : (b.version === 1 ? `<span class="muted">${esc(T('Earlier survey version, no consent box', 'Versión anterior de la encuesta, sin casilla de consentimiento'))}</span>` : `<span class="flag">${esc(T('not recorded', 'sin registro'))}</span>`));
+  add(T('Submitted', 'Enviado'), esc(fmtTime(sub.submitted_at)));
+  add(T('Reference', 'Referencia'), '#' + id + (b.clientId ? ` <span class="muted">(${esc(clip(b.clientId, 8))})</span>` : ''));
+  const bd = b.boundary && typeof b.boundary === 'object' ? b.boundary : null;
+  const pts = bd ? cleanRing(bd.ring) : [];
+  let bdHtml = `<p class="muted">${esc(T('No boundary.', 'Sin límite.'))}</p>`;
+  if (bd) {
+    const [clat, clon] = pts.length ? centroid(pts) : [null, null];
+    const acres = Number(bd.acres);
+    bdHtml = kv(T('Capture method', 'Método de captura'), esc(bd.method === 'walk' ? T('GPS walk', 'Recorrido con GPS') : T('Drawn on map', 'Dibujado en el mapa'))) +
+      kv(T('Area', 'Superficie'), Number.isFinite(acres) ? `${esc(acres)} acres (${(acres * 0.404686).toFixed(1)} ha)` : esc(T('unknown', 'desconocida'))) +
+      kv(T('Corner points', 'Puntos de esquina'), String(Math.max(0, pts.length - 1))) +
+      (clat != null ? kv(T('Center', 'Centro'), `${clat.toFixed(5)}, ${clon.toFixed(5)}`) : '') +
+      (clat != null ? `<div class="btnrow"><a class="btnlink" href="https://www.google.com/maps?q=${clat.toFixed(6)},${clon.toFixed(6)}&amp;t=k" target="_blank" rel="noopener noreferrer">${esc(T('Open in Google Maps', 'Abrir en Google Maps'))}</a>` +
+        `<button class="ghost small" type="button" data-act="kml" data-sub="${id}">${esc(T('Download KML', 'Descargar KML'))}</button></div>` : '') +
+      boundarySvg(pts);
+  }
+  const extras = Array.isArray(b.additionalBoundaries) ? b.additionalBoundaries : [];
+  const extraHtml = extras.length
+    ? `<h3>${esc(T('Additional field files', 'Archivos de otros campos'))}</h3>${extras.map((f, i) =>
+        `<div class="kv"><span class="v">${esc(clip(f && f.filename, 120))}</span>
+         <button class="ghost small" type="button" data-act="extra" data-sub="${id}" data-idx="${i}">${esc(T('Download', 'Descargar'))}</button></div>`).join('')}`
+    : '';
+  return `<div class="cols">
+    <div><h3 class="first">${esc(T('Survey info', 'Datos de la encuesta'))}</h3>${info}
+      ${b.notes ? `<h3>${esc(T('Notes', 'Notas'))}</h3><div class="notes">${esc(clip(b.notes, 5000))}</div>` : ''}
+      <h3>${esc(T('Field boundary', 'Límite del campo'))}</h3>${bdHtml}${extraHtml}
+      ${suggestionsHtml(b.autoSuggestions)}</div>
+    <div><h3 class="first">${esc(T('Answers', 'Respuestas'))}</h3>${answersHtml(b.answers, b.noneApplied)}</div>
+  </div>${photosHtml(b.photos)}`;
+}
+
+// ---- actions ------------------------------------------------------------------------------------
+function fillDetail(id) {
+  const row = document.getElementById('detail-' + id);
+  if (row && loaded.has(id)) row.querySelector('.detail-body').innerHTML = renderDetail(loaded.get(id));
+}
+async function toggleDetail(id, btn) {
+  const row = document.getElementById('detail-' + id);
+  if (!row) return;
+  if (!row.hidden) { row.hidden = true; openIds.delete(id); btn.textContent = T('View', 'Ver'); return; }
+  row.hidden = false; openIds.add(id); btn.textContent = T('Hide', 'Ocultar');
+  const body = row.querySelector('.detail-body');
+  try { await getSub(id); fillDetail(id); }
+  catch (err) {
+    handleAuth(err); openIds.delete(id);
+    const f = friendly(err);
+    body.textContent = T('Could not load this submission. ', 'No se pudo cargar este envío. ') + T(f.en, f.es);
+  }
+}
+function failMsg(err) {
+  handleAuth(err);
+  const f = friendly(err);
+  setMsg('Could not download. ' + f.en, 'No se pudo descargar. ' + f.es, true);
+}
+async function downloadJson(id) {
+  try {
+    const sub = await getSub(id);
+    const out = {...sub.bundle, photos: validPhotos(sub.bundle && sub.bundle.photos)};
+    download(`adams-grower-survey_${safeName(sub.farm_name)}_${id}.json`, JSON.stringify(out, null, 2), 'application/json');
+  } catch (err) { failMsg(err); }
+}
+async function downloadExtra(id, idx) {
+  try {
+    const sub = await getSub(id);
+    const f = (sub.bundle.additionalBoundaries || [])[idx];
+    if (!f) return;
+    let name = String(f.filename || 'boundary').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.\- ]/g, '_').slice(0, 80);
+    if (!/\.(kml|geojson|json)$/i.test(name)) name += '.txt';
+    download(name, String(f.text || ''), 'text/plain');
+  } catch (err) { failMsg(err); }
+}
+async function downloadKml(id) {
+  try {
+    const sub = await getSub(id);
+    const pts = cleanRing(sub.bundle && sub.bundle.boundary && sub.bundle.boundary.ring);
+    if (pts.length < 3) return;
+    download(`adams-grower-survey_${safeName(sub.farm_name)}_${id}.kml`, kml(sub.farm_name || 'Field boundary', pts), 'application/vnd.google-earth.kml+xml');
+  } catch (err) { failMsg(err); }
+}
+// Spreadsheet formula injection: farm names etc. come from a public form, so a value starting with = + - @
+// would run as a formula when the CSV is opened in Excel or Sheets. A leading apostrophe defuses it.
+// (Column names stay in English in both languages: the CSV is data, and other tools read it.)
+const csvCell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+function exportCsv() {
+  const rows = visibleRows();
+  if (!rows.length) { setMsg('Nothing to export yet.', 'Todavía no hay nada que exportar.', true); return; }
+  const head = ['id', 'submitted_pacific', 'farm', 'field', 'contact', 'phone', 'buyer', 'country', 'crop', 'acres', 'photos', 'extra_fields', 'survey_language'];
+  const lines = [head.join(',')].concat(rows.map(r => [r.id, fmtTime(r.submitted_at), r.farm_name, r.field_name, r.contact_name, r.phone, r.buyer, r.country, r.crop, r.acres, r.photo_count, r.extra_fields, r.lang].map(csvCell).join(',')));
+  download(`adams-grower-surveys_${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + lines.join('\r\n'), 'text/csv');
+  setMsg(`Exported ${rows.length} row${rows.length === 1 ? '' : 's'}.`, `Se exportaron ${rows.length} fila${rows.length === 1 ? '' : 's'}.`);
+}
+document.addEventListener('click', e => {
+  const img = e.target.closest('.photos img');
+  if (img) { img.classList.toggle('big'); return; }
+  const btn = e.target.closest('button[data-act]');
+  if (!btn || busy) return;
+  const act = btn.dataset.act;
+  if (act === 'extra') { downloadExtra(Number(btn.dataset.sub), Number(btn.dataset.idx)); return; }
+  if (act === 'kml') { downloadKml(Number(btn.dataset.sub)); return; }
+  const tr = btn.closest('tr.row');
+  if (!tr) return;
+  const id = Number(tr.dataset.id);
+  if (act === 'view') toggleDetail(id, btn);
+  else if (act === 'json') downloadJson(id);
+});
+
+// ---- language -------------------------------------------------------------------------------------
+function applyLang() {
+  document.documentElement.lang = LANG;
+  $$('.lang-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === LANG)));
+  $$('[data-ph-en]').forEach(el => { el.placeholder = (LANG === 'es' && el.dataset.phEs) ? el.dataset.phEs : el.dataset.phEn; });
+  document.title = T('Adams Survey Submissions', 'Envíos de la encuesta Adams');
+  paintMsg(); paintLogin();
+  if (!$('#app').hidden) renderList();
+}
+$$('.lang-btn').forEach(b => b.onclick = () => {
+  LANG = b.dataset.lang === 'es' ? 'es' : 'en';
+  try { localStorage.setItem(LANG_KEY, LANG); } catch {}
+  applyLang();
+});
+
+// ---- session ------------------------------------------------------------------------------------
+function showLogin(en, es) {
+  $('#app').hidden = true; $('#login').hidden = false;
+  loginState = en ? {en, es} : null; paintLogin();
+  $('#pw').focus();
+}
+function handleAuth(err) {
+  if (err && err.code === 401) { pw = ''; try { sessionStorage.removeItem(KEY); } catch {} showLogin('Wrong password.', 'Contraseña incorrecta.'); }
+}
+async function load(explicit) {
+  if (busy) return;
+  setBusy(true); setMsg('Loading…', 'Cargando…');
+  try {
+    const j = await api('');
+    try { sessionStorage.setItem(KEY, pw); } catch {}
+    loaded.clear(); openIds.clear();
+    allRows = Array.isArray(j.submissions) ? j.submissions : [];
+    total = Number(j.total) || allRows.length; hasMore = !!j.hasMore;
+    $('#login').hidden = true; $('#app').hidden = false;
+    renderList(); setMsg('');
+  } catch (err) {
+    if (err.code === 401) {
+      pw = ''; try { sessionStorage.removeItem(KEY); } catch {}
+      if (explicit) showLogin('Wrong password.', 'Contraseña incorrecta.'); else showLogin('');
+    } else {
+      $('#login').hidden = true; $('#app').hidden = false;
+      const f = friendly(err);
+      setMsg('Could not load submissions. ' + f.en, 'No se pudieron cargar los envíos. ' + f.es, true);
+    }
+  } finally { setBusy(false); }
+}
+async function loadMore() {
+  if (busy || !allRows.length) return;
+  setBusy(true); setMsg('Loading older submissions…', 'Cargando envíos anteriores…');
+  try {
+    const j = await api('?before=' + encodeURIComponent(allRows[allRows.length - 1].id));
+    allRows = allRows.concat(Array.isArray(j.submissions) ? j.submissions : []);
+    total = Number(j.total) || total; hasMore = !!j.hasMore;
+    renderList(); setMsg('');
+  } catch (err) {
+    handleAuth(err);
+    const f = friendly(err);
+    setMsg('Could not load more. ' + f.en, 'No se pudo cargar más. ' + f.es, true);
+  } finally { setBusy(false); }
+}
+$('#loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  pw = $('#pw').value.trim();
+  $('#pw').value = '';
+  if (pw) load(true);
+});
+$('#refresh').onclick = () => load(false);
+$('#more').onclick = loadMore;
+$('#csv').onclick = exportCsv;
+$('#find').addEventListener('input', renderList);
+$('#signout').onclick = () => { pw = ''; try { sessionStorage.removeItem(KEY); } catch {} allRows = []; loaded.clear(); openIds.clear(); showLogin(''); };
+
+applyLang();
+if (!/^https?:$/.test(location.protocol)) {
+  // Opened from a local file or an editor preview: there is no server behind /api/ here.
+  showLogin('This page only works at its live address: https://adams-grower-survey.vercel.app/admin/', 'Esta página solo funciona en su dirección en línea: https://adams-grower-survey.vercel.app/admin/');
+  $('#loginBtn').disabled = true;
+} else if (pw) load(false); else showLogin('');
+</script>
+</body>
+</html>

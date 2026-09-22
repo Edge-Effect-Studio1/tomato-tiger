@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adams Grain Company - Soil Health & Grower Programs Survey</title>
+<script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
+<!--
+  survey.html - standalone bilingual (English / Spanish) grower field survey. Served from the Vercel
+  deployment at deploy/adams-grower-survey/ (same folder holds the /api/submit receiver, the
+  /api/suggest-field lookup and the /admin/ viewer). Opens in any browser on a phone, tablet or laptop:
+  no install, no account.
+
+  LANGUAGE: one page, one toggle (EN | ES, top right). Static text is written as a pair of spans,
+  <span data-l="en">..</span><span data-l="es">..</span>, and CSS shows the one matching <html lang>.
+  Runtime messages go through T(english, spanish). Answers are ALWAYS stored as the English option
+  values, so what is submitted never depends on which language the grower used.
+
+  CONNECTIVITY: satellite tiles and the soil / land-use suggestions need a signal at that moment. GPS-walk
+  mode does not. Answers are auto-saved on the device (localStorage) as the grower types, so losing signal
+  never loses work; Submit posts the whole bundle to SUBMIT_URL once there is coverage.
+
+  SUGGESTIONS: once a boundary exists, /api/suggest-field proposes a soil type and any land-use change
+  since 2007 from public data (worldwide satellite land cover + SoilGrids; US: USDA CDL + SSURGO). They are
+  shown as "Suggested, please verify" chips and are never written into an answer until the grower taps
+  Add / Use this. What was suggested and what was accepted is stored in the bundle as `autoSuggestions`.
+
+  SECTIONS mirrors the Cool Farm Platform Annuals tab of Adams' FieldScope CFP template field for field,
+  plus the Adams-specific questions (buyer, certification, crop, soil practices). Option lists were
+  extracted verbatim from Adams' FieldScope workbooks so enum values match what FieldScope accepts.
+  Fields with no FieldScope answer list render as free text. Units outside the FieldScope lists (kg/ha,
+  lb, bushel, acre-ft, ...) are stored with ext:true so Adams converts them when preparing the file.
+
+  BUNDLE (what Submit posts): kind 'headwaters-survey', version 2, clientId, lang, farmName, fieldName,
+  contactName, phone, email, buyer, filledBy, notes, consent, noneApplied, boundary, answers, photos,
+  additionalBoundaries, autoSuggestions, hp (honeypot; must stay empty).
+-->
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="anonymous">
+<script src="/pwa.js" defer></script>
+<style>
+  :root{--green:#193B0A;--cream:#EEEEDE;--yellow:#FBE661;--olive:#5d6244;--ink:#20241a;
+    --line:#d8d8c8;--white:#fbfbf5;--good:#3f7d3f;--warn:#b35f17;--bad:#a5362b;--muted:#5f6350}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--cream)}
+  html[lang="en"] [data-l="es"],html[lang="es"] [data-l="en"]{display:none !important}
+  h1{font-size:16px;margin:0;line-height:1.25}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--olive);margin:0 0 8px}
+  .sec-check{display:inline-block;margin-left:6px;color:var(--good);font-weight:700;opacity:0;transform:scale(.6);
+    transition:opacity .3s ease,transform .3s ease}
+  .card.sec-complete .sec-check{opacity:1;transform:scale(1)}
+  p{margin:0 0 8px;line-height:1.45}
+  button{cursor:pointer;font:inherit;border:0;border-radius:8px;padding:10px 14px;min-height:44px;
+    background:var(--green);color:var(--cream);font-weight:600}
+  button.ghost{background:transparent;color:var(--green);border:1px solid var(--green)}
+  button.warn{background:var(--warn)}
+  button:disabled{opacity:.5;cursor:default}
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #2f6fd6;outline-offset:2px}
+  input,select,textarea{font:inherit;padding:9px 10px;min-height:44px;border:1px solid var(--line);border-radius:8px;
+    background:var(--white);width:100%}
+  textarea{resize:vertical;min-height:70px}
+  label{display:block;font-size:14px;font-weight:600;margin-bottom:4px;line-height:1.3}
+  .field{margin-bottom:14px}
+  .field.dimmed{opacity:.4}
+  .field.dimmed input,.field.dimmed select,.field.dimmed textarea{background:var(--cream);cursor:not-allowed}
+  .req::after{content:" *";color:var(--bad)}
+  .hint{color:var(--muted);font-size:12.5px;line-height:1.45}
+  .fh{margin-top:4px}
+
+  header{background:var(--green);color:var(--cream);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  header .dot{width:20px;height:20px;border-radius:50%;background:var(--yellow);flex:none}
+  header .t{flex:1 1 200px;min-width:0}
+  header .t small{display:block;color:var(--cream);opacity:.85;font-size:11.5px;line-height:1.3;margin-top:2px}
+  .langsw{display:inline-flex;border:1px solid rgba(238,238,222,.6);border-radius:8px;overflow:hidden;flex:none}
+  .langsw button{background:transparent;color:var(--cream);border:0;border-radius:0;padding:0 14px;min-height:44px;min-width:50px;
+    font-weight:700;font-size:14px;letter-spacing:.05em}
+  .langsw button[aria-pressed="true"]{background:var(--yellow);color:var(--green)}
+  .langsw.onlight{border-color:var(--green)}
+  .langsw.onlight button{color:var(--green)}
+  .langsw.onlight button[aria-pressed="true"]{background:var(--green);color:var(--cream)}
+  main{max-width:720px;margin:0 auto;padding:14px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  .intro{border-color:#c9d3a8;background:#f6f8ea}
+  .intro h2{font-size:17px;text-transform:none;letter-spacing:0;color:var(--green)}
+  .intro ul{margin:6px 0 10px;padding-left:20px}
+  .intro li{margin-bottom:5px;line-height:1.45}
+  .sec-why{color:#3d4130;font-size:14px;line-height:1.5;margin:0 0 12px;padding-left:10px;border-left:3px solid var(--yellow)}
+  .sec-why b{color:var(--green)}
+
+  #mapwrap{position:relative}
+  #map{width:100%;height:52vh;min-height:320px;border-radius:8px;overflow:hidden;background:#ccc}
+  #map.no-signal::before{content:attr(data-nosignal);
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+    padding:20px;background:#3a3a2e;color:var(--cream);font-size:13px;z-index:5}
+  .mapholder{position:relative}
+  .mapctls{position:absolute;top:10px;left:10px;z-index:6;display:flex;flex-direction:column;gap:8px}
+  button.mapctl{width:44px;height:44px;border-radius:8px;background:var(--white);color:var(--ink);
+    border:1px solid var(--line);padding:0;font-size:17px;line-height:1;display:flex;
+    align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.28)}
+  button.mapctl:active{background:var(--cream)}
+  .maptools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  #boundary-status{font-size:14px;padding:9px 10px;border-radius:8px;background:var(--cream);margin-top:8px;line-height:1.4}
+  #boundary-status.ok{background:#e4efe0;color:#2c6a2c}
+  #trackfallback{display:none;width:100%;height:220px;border:1px dashed var(--line);border-radius:8px;
+    margin-top:8px;background:var(--white)}
+  #mode-walk .when-walking,#mode-walk.walking .when-idle{display:none !important}
+  #mode-walk.walking .when-walking{display:inline !important}
+  #toggle-bound .when-hidden{display:none !important}
+  #toggle-bound.is-hidden .when-hidden{display:inline !important}
+  #toggle-bound.is-hidden .when-shown{display:none !important}
+
+  .searchrow{display:flex;gap:8px;margin-bottom:10px;position:relative}
+  .searchrow input{flex:1;min-width:0}
+  .searchrow button{white-space:nowrap}
+  #geo-results{position:absolute;top:100%;left:0;right:0;background:var(--white);border:1px solid var(--line);
+    border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.18);z-index:20;max-height:220px;overflow:auto;margin-top:2px}
+  #geo-results[hidden]{display:none}
+  .geo-row{padding:11px 10px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .geo-row:last-child{border-bottom:0}
+  .geo-row:hover{background:var(--cream)}
+
+  .uploadrow{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .uplabel{display:block;font-size:14px;font-weight:600;margin-bottom:6px}
+  .uploadrow input[type=file]{margin-bottom:6px}
+  details.more{margin-top:10px}
+  details.more>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--olive);padding:10px 0;min-height:44px;display:flex;align-items:center}
+
+  .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .qgrid .field.full{grid-column:1 / -1}
+  @media (max-width:520px){.qgrid{grid-template-columns:1fr}}
+
+  .instances{counter-reset:inst}
+  .instance{padding:10px 0;border-top:1px dashed var(--line);counter-increment:inst}
+  .instance:first-child{border-top:0;padding-top:0}
+  .instance-hd{font-size:13px;font-weight:700;color:var(--olive);text-transform:uppercase;letter-spacing:.04em;margin:2px 0 8px}
+  .instance-hd::after{content:" " counter(inst)}
+  .rm-instance{margin-top:2px;font-size:13.5px;padding:6px 14px;border-color:var(--bad);color:var(--bad)}
+  .add-instance{margin-top:8px}
+  .card.is-none .instances,.card.is-none .add-instance{display:none}
+  .nonetick{background:var(--cream);border-radius:8px;padding:10px 12px;margin:0 0 10px}
+  .compound{display:flex;gap:6px}
+  .compound input{flex:1.4;min-width:0}
+  .compound select{flex:1;min-width:0}
+  .tickfield{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:400;margin-bottom:0}
+  .tickfield{min-height:44px}
+  .tickfield input{width:22px;height:22px;min-height:0;flex:none;margin:0}
+  .multi{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  @media (max-width:520px){.multi{grid-template-columns:1fr}}
+  .fieldflag{display:block;color:var(--muted);font-size:11.5px;margin-top:3px;font-weight:400;font-style:italic}
+
+  .chip{border:1px solid #cfd9b4;background:#f3f7e6;border-radius:8px;padding:10px 12px;margin:0 0 8px;font-size:13.5px;line-height:1.45}
+  .chip .chip-hd{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#4a6a1a;margin-bottom:3px}
+  .chip.loading,.chip.quiet{background:var(--white);border-style:dashed;color:var(--muted)}
+  .chip .chip-actions{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+  .chip button{padding:8px 14px;min-height:40px;font-size:13.5px}
+  .chip.done{background:#e8f2e0;border-color:#b9d3a8}
+  .lu-banner{margin:0 0 12px}
+  .lu-row{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px dashed #cfd9b4;padding:9px 0}
+  .lu-t{flex:1;min-width:0;font-size:14px}
+  .conf{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px;margin-left:4px;background:#e8e8d6;color:#5b5f47;white-space:nowrap}
+  .conf.high{background:#dcebd3;color:#2f6a2f}.conf.medium{background:#f4ecc8;color:#6f6110}.conf.low{background:#f2ddd0;color:#8a4a1a}
+
+  details.optgroup{background:var(--white);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  details.optgroup>summary{cursor:pointer;padding:12px 14px;font-weight:700;font-size:15px;list-style:none;min-height:56px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px}
+  details.optgroup>summary::-webkit-details-marker{display:none}
+  details.optgroup>summary::after{content:"+";font-size:26px;font-weight:400;line-height:1;flex:none}
+  details.optgroup[open]>summary::after{content:"\2013"}
+  .optsub{display:block;font-weight:400;font-size:12.5px;color:var(--muted);margin-top:2px}
+  details.optgroup>.optbody{padding:0 12px 2px}
+  details.optgroup .card{background:#f8f8ef}
+
+  .photog{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:10px}
+  .photog .ph{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1}
+  .photog .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .photog .ph button{position:absolute;top:3px;right:3px;padding:0;width:40px;height:40px;min-height:0;font-size:18px;line-height:1;background:var(--bad)}
+  #photo-size-hint.bad{color:var(--bad)}
+
+  .consent{border:2px solid var(--line)}
+  .consent.flag{border-color:var(--bad)}
+  .consent .tickfield{align-items:flex-start;font-size:14.5px;line-height:1.45}
+  .consent .tickfield input{margin-top:2px}
+
+  #savebar{position:sticky;bottom:0;z-index:50;background:var(--cream);border-top:1px solid var(--line);
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:0}
+  #submit-survey{flex:0 0 auto}
+  #save-status{font-size:14px;flex:1 1 200px;line-height:1.4}
+  #save-status.bad{color:var(--bad)}
+  #save-status.ok{color:var(--good)}
+  #draft-status{flex:1 1 100%;font-size:12px}
+  #draft-status.bad{color:var(--bad)}
+
+  #done{background:var(--white);border:2px solid var(--good);border-radius:12px;padding:22px 16px;text-align:center}
+  #done[hidden]{display:none}
+  #done h2{font-size:22px;color:var(--good);text-transform:none;letter-spacing:0;margin-bottom:8px}
+  .refno{font-size:30px;font-weight:800;letter-spacing:.05em;margin:4px 0 12px;color:var(--green)}
+  #done .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+
+  #gate{position:fixed;inset:0;z-index:1000;background:var(--green);display:flex;
+    align-items:center;justify-content:center;padding:20px;overflow:auto}
+  #gate .box{max-width:400px;width:100%;background:var(--white);color:var(--ink);
+    border-radius:10px;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  #gate h2{color:var(--green);margin:0 0 8px;font-size:17px;text-transform:none;letter-spacing:0}
+  #gate p{margin:0 0 12px}
+  #gate .err{color:var(--bad);font-size:13.5px;margin-top:8px;display:none}
+  #gate .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+
+  .hp{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+  #toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2000;
+    background:var(--ink);color:var(--white);padding:11px 16px;border-radius:8px;
+    box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:90vw;font-size:14px;line-height:1.4;
+    text-align:center;display:none}
+  @media (max-width:420px){
+    main{padding:10px}
+    .card{padding:12px}
+    .maptools button{flex:1 1 calc(50% - 8px)}
+  }
+</style>
+</head>
+<body>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="gate">
+  <div class="box">
+    <div class="top">
+      <h2 style="margin:0">Adams Grain Company</h2>
+      <div class="langsw onlight" role="group" aria-label="Language / Idioma">
+        <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+      </div>
+    </div>
+    <p><span data-l="en">This survey is for invited growers and suppliers. Enter the access code you were given.</span><span data-l="es">Esta encuesta es para productores y proveedores invitados. Ingrese el código de acceso que se le dio.</span></p>
+    <input type="password" id="gate-pw" data-ph-en="Access code" data-ph-es="Código de acceso" placeholder="Access code" autocomplete="off">
+    <button id="gate-go" style="width:100%;margin-top:8px"><span data-l="en">Continue</span><span data-l="es">Continuar</span></button>
+    <div class="err" id="gate-err"><span data-l="en">Incorrect code. Please try again.</span><span data-l="es">Código incorrecto. Intente de nuevo.</span></div>
+  </div>
+</div>
+<header>
+  <span class="dot"></span>
+  <div class="t">
+    <h1>Adams Grain Company</h1>
+    <small><span data-l="en">Soil Health &amp; Grower Programs Survey</span><span data-l="es">Encuesta de Salud del Suelo y Programas para Productores</span></small>
+  </div>
+  <div class="langsw" role="group" aria-label="Language / Idioma">
+    <button type="button" class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
+    <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+  </div>
+</header>
+<main>
+<div id="formwrap">
+
+  <div class="card intro">
+    <h2><span data-l="en">Welcome</span><span data-l="es">Le damos la bienvenida</span></h2>
+    <p><span data-l="en">Adams Grain Company buys soybeans, safflower and sunflower, some of it through exporters. This survey asks about one of your fields so we can estimate its environmental footprint and see whether our soil-health programs could help you. Please complete it to the best of your ability. It takes about 20 to 40 minutes, depending on how much you list.</span><span data-l="es">Adams Grain Company compra soja, cártamo y girasol, parte de ello a través de exportadores. Esta encuesta pregunta por uno de sus lotes para estimar su huella ambiental y ver si nuestros programas de salud del suelo pueden servirle. Por favor complétela lo mejor que pueda. Lleva de 20 a 40 minutos, según cuánto detalle quiera dar.</span></p>
+    <ul>
+      <li><span data-l="en"><b>Please complete as much as you can, to the best of your ability.</b> To submit, we need your farm name and one field outline on the map. The more you fill in, the more useful the results are for you and for us.</span><span data-l="es"><b>Por favor complete todo lo que pueda, lo mejor que pueda.</b> Para enviar la encuesta se necesitan el nombre de su finca y el perímetro de un lote en el mapa. Cuanto más complete, más útiles serán los resultados para usted y para nosotros.</span></li>
+      <li><span data-l="en">Give your best estimate when you do not have exact numbers, and skip only what does not apply to you.</span><span data-l="es">Dé su mejor estimación cuando no tenga los números exactos, y omita solo lo que no le corresponda.</span></li>
+      <li><span data-l="en">Your answers are saved on this device as you go. If you lose signal, keep going and tap Submit when you are back online.</span><span data-l="es">Sus respuestas se guardan en este dispositivo mientras las escribe. Si pierde la señal, siga adelante y toque Enviar cuando vuelva a tener conexión.</span></li>
+      <li><span data-l="en">Your farm name and location are never shared with anyone, including our customers, without asking you first.</span><span data-l="es">El nombre y la ubicación de su finca nunca se comparten con nadie, incluidos nuestros clientes, sin pedirle permiso primero.</span></li>
+    </ul>
+    <p class="hint"><span data-l="en">Questions? Robbe Verhofste, Soil Health &amp; Grower Programs Manager, Adams Grain Company</span><span data-l="es">¿Preguntas? Robbe Verhofste, Gerente de Salud del Suelo y Programas para Productores, Adams Grain Company</span> · rverhofste@adamsgrp.com · 515-326-5118</p>
+  </div>
+
+  <div class="card">
+    <h2><span data-l="en">About you</span><span data-l="es">Sobre usted</span></h2>
+    <div class="qgrid">
+      <div class="field"><label class="req" for="q-farmname"><span data-l="en">Grower / farm name</span><span data-l="es">Nombre del productor / finca</span></label>
+        <input id="q-farmname" required autocomplete="organization"></div>
+      <div class="field"><label for="q-fieldname"><span data-l="en">Field name (optional)</span><span data-l="es">Nombre del lote (opcional)</span></label>
+        <input id="q-fieldname" data-ph-en="Any name you use for this field" data-ph-es="El nombre que usted le da a este lote" placeholder="Any name you use for this field"></div>
+      <div class="field"><label for="q-contactname"><span data-l="en">Contact name (optional)</span><span data-l="es">Nombre de contacto (opcional)</span></label>
+        <input id="q-contactname" autocomplete="name"></div>
+      <div class="field"><label for="q-phone"><span data-l="en">Phone / WhatsApp (optional)</span><span data-l="es">Teléfono / WhatsApp (opcional)</span></label>
+        <input id="q-phone" type="tel" autocomplete="tel"></div>
+      <div class="field"><label for="q-email"><span data-l="en">Email (optional)</span><span data-l="es">Correo electrónico (opcional)</span></label>
+        <input id="q-email" type="email" autocomplete="email" inputmode="email">
+        <div class="hint fh"><span data-l="en">Only used to confirm we received your survey and to follow up with you.</span><span data-l="es">Solo se usa para confirmar que recibimos su encuesta y para comunicarnos con usted.</span></div></div>
+      <div class="field"><label for="q-filledby"><span data-l="en">Filled out by (if not the grower)</span><span data-l="es">Completado por (si no es el productor)</span></label>
+        <input id="q-filledby"></div>
+      <div class="field full"><label for="q-buyer"><span data-l="en">Who do you sell your crop to? (optional)</span><span data-l="es">¿A quién le vende su cosecha? (opcional)</span></label>
+        <input id="q-buyer" data-ph-en="Company or exporter, e.g. Petro Agro" data-ph-es="Empresa o exportador, p. ej. Petro Agro" placeholder="Company or exporter, e.g. Petro Agro">
+        <div class="hint fh"><span data-l="en">The company or exporter you deliver to. This lets Adams connect your farm to our supply records.</span><span data-l="es">La empresa o el exportador al que usted entrega. Así Adams puede conectar su finca con nuestros registros de abastecimiento.</span></div></div>
+    </div>
+    <div class="hp" aria-hidden="true"><label for="q-hp">Leave this field empty</label><input id="q-hp" name="hp_x7q" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+  </div>
+
+  <div class="card" id="mapwrap">
+    <h2><span data-l="en">Field boundary</span><span data-l="es">Perímetro del lote</span> <span style="color:var(--bad)">*</span></h2>
+    <p class="sec-why"><span data-l="en">The boundary shows exactly which land this survey describes. We use it to work out the field's size, and to suggest answers from public soil and satellite records for you to check.</span><span data-l="es">El perímetro muestra a qué lote se refiere esta encuesta. Con él calculamos la superficie y le sugerimos algunas respuestas, tomadas de mapas públicos de suelo y de satélite. Usted las revisa y las corrige.</span></p>
+    <p class="hint"><span data-l="en">A field is one plot you manage as a single unit. Start with the field you know best, ideally one planted to soybean, safflower or sunflower. You can send other fields afterward.</span><span data-l="es">Un lote es una parcela de cultivo que usted maneja como una sola unidad. Empiece por el lote que mejor conozca, de preferencia uno sembrado con soja, cártamo o girasol. Después puede enviar otros lotes.</span></p>
+    <p><span data-l="en"><b>Tap the corners of your field on the map</b>, one by one, going around the edge. Drag a point to move it. Tap a point to remove it. No signal or no map? Use <b>Walk perimeter</b> and walk the edge with your phone's GPS.</span><span data-l="es"><b>Toque las esquinas de su lote en el mapa</b>, una por una, siguiendo el borde. Arrastre un punto para moverlo. Toque un punto para quitarlo. ¿Sin señal o sin mapa? Use <b>Recorrer el perímetro</b> y camine el borde con el GPS de su celular.</span></p>
+    <div class="searchrow">
+      <input id="geo-q" data-ph-en="Search a town or address" data-ph-es="Buscar un pueblo o una dirección" placeholder="Search a town or address" aria-label="Search">
+      <button id="geo-go" class="ghost"><span data-l="en">Search</span><span data-l="es">Buscar</span></button>
+      <div id="geo-results" hidden></div>
+    </div>
+    <div class="mapholder">
+      <div id="map" data-nosignal="No map imagery loaded. GPS-walk mode still works."></div>
+      <div class="mapctls">
+        <button id="toggle-layer" class="mapctl" data-title-en="Show streets" data-title-es="Ver calles" title="Show streets" aria-label="Show streets">🛰️</button>
+        <button id="goto-me" class="mapctl" data-title-en="Go to my location" data-title-es="Ir a mi ubicación" title="Go to my location" aria-label="Go to my location">📍</button>
+      </div>
+    </div>
+    <div class="maptools">
+      <button id="mode-draw">✎ <span data-l="en">Draw on map</span><span data-l="es">Dibujar en el mapa</span></button>
+      <button id="mode-walk" class="ghost">🚶 <span class="when-idle"><span data-l="en">Walk perimeter</span><span data-l="es">Recorrer el perímetro</span></span><span class="when-walking"><span data-l="en">Stop walking</span><span data-l="es">Dejar de caminar</span></span></button>
+      <button id="undo-pt" class="ghost"><span data-l="en">Undo last point</span><span data-l="es">Deshacer último punto</span></button>
+      <button id="clear-bound" class="ghost"><span data-l="en">Clear</span><span data-l="es">Borrar</span></button>
+      <button id="toggle-bound" class="ghost"><span class="when-shown"><span data-l="en">Hide boundary</span><span data-l="es">Ocultar perímetro</span></span><span class="when-hidden"><span data-l="en">Show boundary</span><span data-l="es">Mostrar perímetro</span></span></button>
+    </div>
+    <canvas id="trackfallback" width="600" height="440"></canvas>
+    <div id="boundary-status"></div>
+    <div class="uploadrow">
+      <label class="uplabel" for="upload-boundary"><span data-l="en">Or upload an existing boundary (KML or GeoJSON)</span><span data-l="es">O suba un perímetro que ya tenga (KML o GeoJSON)</span></label>
+      <input type="file" id="upload-boundary" accept=".kml,.geojson,.json,application/vnd.google-earth.kml+xml,application/geo+json,application/json">
+      <p class="hint"><span data-l="en">Shapefiles (.shp) are not supported. In QGIS, ArcGIS or Google Earth, export the boundary as KML or GeoJSON and upload that file.</span><span data-l="es">No se aceptan archivos Shapefile (.shp). En QGIS, ArcGIS o Google Earth, exporte el límite como KML o GeoJSON y suba ese archivo.</span></p>
+    </div>
+    <details class="more">
+      <summary><span data-l="en">More options</span><span data-l="es">Más opciones</span></summary>
+      <button id="save-kml" class="ghost"><span data-l="en">Save this boundary as a KML file</span><span data-l="es">Guardar este perímetro como archivo KML</span></button>
+    </details>
+  </div>
+
+  <div id="sections"></div>
+
+  <details class="optgroup" id="optgroup">
+    <summary><span><span data-l="en">A few extras (only if they apply)</span><span data-l="es">Algunos extras (solo si le corresponden)</span><span class="optsub"><span data-l="en">Energy, transport, intercrop, hedgerows, waste water, refrigerants</span><span data-l="es">Energía, transporte, cultivo intercalado, cercos vivos, agua residual, refrigerantes</span></span></span></summary>
+    <div class="optbody" id="sections-optional"></div>
+  </details>
+
+  <div class="card">
+    <h2><span data-l="en">Photos</span><span data-l="es">Fotos</span></h2>
+    <p><span data-l="en">Optional. One or two photos help us picture the field: the crop, the soil or the residue. Photos can show where your farm is, so we keep them private under the same promise as your location. Please leave people out of the photos. You can add up to 10.</span><span data-l="es">Opcional. Una o dos fotos nos ayudan a imaginar el lote: el cultivo, el suelo o el rastrojo. Las fotos pueden mostrar dónde está su finca, así que las guardamos en privado, con la misma promesa que su ubicación. Por favor evite que salgan personas. Puede agregar hasta 10.</span></p>
+    <input type="file" id="photo-input" accept="image/*" multiple aria-label="Photos">
+    <div class="photog" id="photo-grid"></div>
+    <div id="photo-size-hint" class="hint"></div>
+  </div>
+
+  <div class="card">
+    <h2><span data-l="en">Notes</span><span data-l="es">Notas</span></h2>
+    <textarea id="q-notes" data-ph-en="Anything else worth telling us" data-ph-es="Cualquier otra cosa que quiera contarnos" placeholder="Anything else worth telling us" aria-label="Notes"></textarea>
+  </div>
+
+  <div class="card">
+    <h2><span data-l="en">Other fields on your farm</span><span data-l="es">Otros lotes de su finca</span></h2>
+    <p><span data-l="en">Do you farm other fields besides this one? If you have their boundaries as KML or GeoJSON files, upload them here. To describe another field in full, tap <b>Submit another field</b> after you submit this one; it keeps your farm and contact details.</span><span data-l="es">¿Cultiva otros lotes además de este? Si tiene sus perímetros como archivos KML o GeoJSON, súbalos aquí. Para describir otro lote con todo detalle, toque <b>Enviar otro lote</b> después de enviar este. Se conservan los datos de su finca y de contacto.</span></p>
+    <input type="file" id="extra-boundaries-input" accept=".kml,.geojson,.json,application/vnd.google-earth.kml+xml,application/geo+json,application/json" multiple aria-label="Additional boundaries">
+    <div id="extra-boundaries-list" class="hint"></div>
+  </div>
+
+  <div class="card consent" id="consent-card">
+    <label class="tickfield"><input type="checkbox" id="q-consent">
+      <span><span data-l="en">I agree that Adams Grain Company may store and use my answers to calculate farm-level environmental impact. My farm name and location will not be shared with anyone, including Adams' customers, without asking me first.</span><span data-l="es">Acepto que Adams Grain Company guarde y use mis respuestas para calcular el impacto ambiental a nivel de finca. El nombre y la ubicación de mi finca no se compartirán con nadie, incluidos los clientes de Adams, sin pedirme permiso primero.</span> <b style="color:var(--bad)">*</b></span></label>
+    <p class="hint"><span data-l="en">When you tap Submit, your answers go to Adams. You can send another field afterward.</span><span data-l="es">Al tocar Enviar, sus respuestas llegan a Adams. Después puede enviar otro lote.</span></p>
+  </div>
+
+</div>
+
+<div id="done" hidden tabindex="-1">
+  <h2><span data-l="en">Thank you!</span><span data-l="es">¡Gracias!</span></h2>
+  <p id="done-line"></p>
+  <div id="done-refwrap"><div><span data-l="en">Your reference number</span><span data-l="es">Su número de referencia</span></div>
+  <div class="refno" id="done-ref"></div></div>
+  <p class="hint"><span data-l="en">Keep this number in case you need to contact us about this survey (rverhofste@adamsgrp.com).</span><span data-l="es">Guarde este número por si necesita comunicarse con nosotros sobre esta encuesta (rverhofste@adamsgrp.com).</span></p>
+  <div class="row">
+    <button id="another-field"><span data-l="en">Submit another field</span><span data-l="es">Enviar otro lote</span></button>
+    <button id="finish" class="ghost"><span data-l="en">I am finished</span><span data-l="es">Terminé</span></button>
+  </div>
+  <p class="hint" id="finish-note" hidden style="margin-top:14px"><span data-l="en">All done. You can close this page.</span><span data-l="es">Listo. Puede cerrar esta página.</span></p>
+</div>
+</main>
+<div id="savebar">
+  <button id="submit-survey" hidden>📤 <span data-l="en">Submit survey</span><span data-l="es">Enviar encuesta</span></button>
+  <div id="save-status" role="status"></div>
+  <div id="draft-status" class="hint"></div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin="anonymous"></script>
+<script src="/js/survey-1.js"></script>
+<script src="/js/survey-2.js"></script>
+<script src="/js/survey-3.js"></script>
+</body>
+</html>
