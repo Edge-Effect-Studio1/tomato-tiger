@@ -412,9 +412,32 @@ function landuseHtml() {
     ? `<div class="hint" style="margin-top:8px">${esc(T('Recent crops on this land (USDA map)', 'Cultivos recientes en esta tierra (mapa del USDA)'))}: ${lu.cropHistory.map(h => esc(h.year + ' ' + h.category)).join(', ')}</div>` : '';
   return `<div class="chip">${chipHead()}<div>${esc(T(lu.summary, lu.summaryEs))}</div>${chipNote()}${rows}${crops}</div>`;
 }
+// USDA crop history (already fetched for the land-use-change suggestion, US fields only) names the
+// actual crop grown in past years, not just a coarse land-use bucket - good enough to suggest an
+// answer for "what was on this field just before," which otherwise nobody was using it for. Prefers
+// the year right before whichever harvest the grower is describing; falls back to the second most
+// recent year on file if no year is chosen yet.
+function previousCropChipHtml() {
+  const lu = suggestState.data && suggestState.data.landuse;
+  if (!lu || !lu.available || !lu.cropHistory || !lu.cropHistory.length) return '';
+  const assessYear = +(document.getElementById('q-cropsoil-0-assessYear')?.value || '') || null;
+  const entry = (assessYear && lu.cropHistory.find(h => h.year === assessYear - 1)) || lu.cropHistory[1];
+  if (!entry || !entry.category) return '';
+  return `<div class="chip">${chipHead()}<div>${esc(T(`${entry.category} (${entry.year}, USDA crop history)`, `${entry.category} (${entry.year}, historial de cultivos del USDA)`))}</div>${chipNote()}` +
+    `<div class="chip-actions"><button type="button" data-act="use-prevcrop" data-value="${esc(entry.category)}">${esc(T('Use this', 'Usar esto'))}</button></div></div>`;
+}
+function usePreviousCrop(value) {
+  const el = document.getElementById('q-cropsoil-0-previousCrop');
+  if (!el || !value) return;
+  el.value = value;
+  scheduleDraftSave();
+  const card = el.closest('.card'); if (card) checkSectionCompletion(card);
+}
 function renderSuggestions() {
   const slot = document.querySelector('[data-chip="soil"]');
   if (slot) slot.innerHTML = soilChipHtml();
+  const pcSlot = document.querySelector('[data-chip="previousCrop"]');
+  if (pcSlot) pcSlot.innerHTML = previousCropChipHtml();
   const banner = $('#lu-banner');
   if (banner) banner.innerHTML = landuseHtml();
 }
@@ -600,8 +623,10 @@ document.addEventListener('click', e => {
   if (!b) return;
   if (b.dataset.act === 'use-soil') useSoil();
   else if (b.dataset.act === 'add-lu') addLanduse(+b.dataset.i);
+  else if (b.dataset.act === 'use-prevcrop') usePreviousCrop(b.dataset.value);
 });
 document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#sec-landchange')) renderSuggestions(); });
+document.addEventListener('change', e => { if (e.target.id === 'q-cropsoil-0-assessYear') renderSuggestions(); }); // re-pick the previous-crop suggestion for the newly chosen year
 
 // ---------------------------------------------------------------------------------------------
 // NDVI (satellite greenness) timeline. Deliberately opt-in, unlike the soil/land-use chips: this is
