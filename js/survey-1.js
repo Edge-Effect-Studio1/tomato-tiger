@@ -146,6 +146,18 @@ const SOIL_TEXTURE = [['Sand','Arena'], ['Loamy sand','Arena franca'], ['Sandy l
 // chip:'soil' (suggestion slot above the input), full:true (spans both columns), notFound:true (a
 // FieldScope free-text gap; shows a neutral placeholder), autoMachine:true (a 'tick' that, when checked,
 // auto-adds a blank line under Machines and field passes - see ensureMachinePass() in 07_form.js).
+// dict:'code' links a field to its canonical entry in Headwaters' universal data dictionary
+// (app/dictionary.js - the same file behind Adams_Data_Dictionary_*.xlsx), so a downstream export can
+// tell "this survey answer = this canonical fact" without re-deriving the mapping by hand. Matched
+// 2026-09-22 against dictionary.js's 57 DICTIONARY codes directly (not the xlsx export, which had
+// gone stale). Coverage by target: FieldScope's crosswalk is solid (verbatim-sourced); COMET-Farm's
+// XML crosswalk (COMET_XML in dictionary.js) is independently verified against the real API docs,
+// with one flagged-uncertain element (harvest date); Cool Farm Tool's crosswalk is explicitly
+// unverified in dictionary.js's own "HONEST GAPS" note - a `dict` code still applies to a CFT field,
+// but do not trust dictionary.js's `platforms.cft` values for an actual CFT export without checking
+// them independently first. Not every survey field has a dictionary equivalent (the dictionary is
+// scoped to core Cool-Farm-Tool-family inputs, not this survey's full extras/logistics detail) -
+// absence of `dict` just means there is nothing canonical to link to, not an oversight.
 // Optional per section: why/whyEs (the "why we ask / how to answer" line), group:'optional' (goes in the
 // collapsed group), noneTick (a "none applied" checkbox that hides the section), banner:'landuse' (the
 // land-use suggestion slot).

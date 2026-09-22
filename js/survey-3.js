@@ -500,16 +500,35 @@ const FERT_NSPLIT = {
   'Urea - 46% N': {urea: 100},
   'Urea ammonium nitrate solution - 32% N': {ammonium: 25, nitrate: 25, urea: 50},
 };
+// What FERT_NSPLIT last wrote, per fert instance - so switching the Fertilizer type away (to another
+// mapped product, or to an unmapped one like a manure) clears the PREVIOUS type's numbers first.
+// Without this, picking Ammonium nitrate (fills 50/50) and then changing to Cattle manure left the
+// 50/50 sitting there looking like it was looked up for manure, which it never was (reported live
+// 2026-09-22). Same tracked-staleness pattern as autoFilledSoil/autoFilledCountry - only clears a
+// field still holding exactly what was auto-filled; a grower's own typed number is never touched.
+const autoFilledFertSplit = new Map(); // uid -> {fieldId: lastAutoFilledValue}
 document.addEventListener('change', e => {
   const m = /^q-fert-(\d+)-type$/.exec(e.target.id || '');
   if (!m) return;
+  const uid = m[1];
+  const fieldOf = k => ({ammonium: 'pctAmmonium', nitrate: 'pctNitrate', urea: 'pctUrea', p2o5: 'pctP2O5', k2o: 'pctK2O'})[k];
+  const prev = autoFilledFertSplit.get(uid);
+  if (prev) {
+    for (const [fieldId, val] of Object.entries(prev)) {
+      const el = document.getElementById(`q-fert-${uid}-${fieldId}`);
+      if (el && el.value === val) { el.value = ''; syncPctSlider(el); }
+    }
+  }
+  autoFilledFertSplit.delete(uid);
   const split = FERT_NSPLIT[e.target.value];
   if (!split) return;
-  const fieldOf = k => ({ammonium: 'pctAmmonium', nitrate: 'pctNitrate', urea: 'pctUrea', p2o5: 'pctP2O5', k2o: 'pctK2O'})[k];
+  const applied = {};
   for (const [k, v] of Object.entries(split)) {
-    const el = document.getElementById(`q-fert-${m[1]}-${fieldOf(k)}`);
-    if (el && !el.value) { el.value = String(v); syncPctSlider(el); }
+    const fieldId = fieldOf(k);
+    const el = document.getElementById(`q-fert-${uid}-${fieldId}`);
+    if (el && !el.value) { el.value = String(v); syncPctSlider(el); applied[fieldId] = el.value; }
   }
+  if (Object.keys(applied).length) autoFilledFertSplit.set(uid, applied);
 });
 
 // ---------------------------------------------------------------------------------------------
