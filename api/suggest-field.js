@@ -486,9 +486,17 @@ async function suggest(lat, lon, debug, samples) {
     if (s) return s;
     return (await timed('soilgrids', soilGlobal(lat, lon).catch(() => null))) || { available: false, source: 'none' };
   })();
+  // CDL runs first for US points (it is far better than the global data), but it depends on a single
+  // external service (nassgeodata.gmu.edu) that has been seen to fail slow rather than fail fast - every
+  // one of its ~18 yearly requests hanging toward its own timeout instead of erroring immediately, which
+  // can eat the ENTIRE outer deadline and starve the satellite fallback of any time to run at all (seen
+  // live 2026-09-22: a request landed on the 38 s deadline exactly, only SSURGO had completed). Giving
+  // CDL its own shorter sub-deadline guarantees satellite still gets a real window even during a CDL
+  // outage, instead of both sources coming back empty.
+  const CDL_SUBDEADLINE_MS = 15000;
   const landP = (async () => {
     if (us) {
-      const cdl = await timed('cdl', landuseCDL(lat, lon, samples).catch(() => null));
+      const cdl = await timed('cdl', within(landuseCDL(lat, lon, samples).catch(() => null), CDL_SUBDEADLINE_MS, null));
       if (cdl) return cdl;
     }
     return (await timed('satellite', landuseSatellite(lat, lon, samples).catch(() => null))) || { available: false, source: 'none', suggestions: [] };
