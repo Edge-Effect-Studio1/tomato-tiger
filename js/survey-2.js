@@ -111,8 +111,13 @@ function scheduleAutoFill() {
   if (ring.length < 3) return;
   autoFillTimer = setTimeout(runAutoFill, 1500);
 }
+let autoFillToastShown = false; // once per session - the boundary can settle many times as it's refined, the point is announced once
 async function runAutoFill() {
   if (ring.length < 3 || walkWatchId != null) return; // mid-walk the ring changes every few seconds; wait for Stop
+  if (!autoFillToastShown) {
+    autoFillToastShown = true;
+    showToast(T('Pulling soil, climate and land cover history for you, to make this survey easier…', 'Buscando datos de suelo, clima e historial de uso del suelo, para que la encuesta sea más fácil…'), 4000);
+  }
   const amtEl = document.getElementById('q-cropsoil-0-growingArea-amt');
   const unitEl = document.getElementById('q-cropsoil-0-growingArea-unit');
   if (amtEl && unitEl) {
