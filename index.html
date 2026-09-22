@@ -198,6 +198,8 @@
 
   #savebar{position:sticky;bottom:0;z-index:50;background:var(--cream);border-top:1px solid var(--line);
     padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:0}
+  #progress-wrap{flex:1 1 100%;height:5px;background:var(--line);border-radius:3px;overflow:hidden;order:-1;margin:-10px -12px 8px}
+  #progress-bar{height:100%;width:0;background:var(--good);transition:width .5s ease}
   #submit-survey{flex:0 0 auto}
   #save-status{font-size:14px;flex:1 1 200px;line-height:1.4}
   #save-status.bad{color:var(--bad)}
@@ -448,6 +450,7 @@
 </div>
 </main>
 <div id="savebar">
+  <div id="progress-wrap" aria-hidden="true"><div id="progress-bar"></div></div>
   <button id="submit-survey" hidden>📤 <span data-l="en">Submit survey</span><span data-l="es">Enviar encuesta</span></button>
   <div id="save-status" role="status"></div>
   <div id="draft-status" class="hint"></div>

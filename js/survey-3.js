@@ -164,6 +164,38 @@ function checkSectionCompletion(card) {
     firstCompletionToastShown = true;
     showToast(T('Nice, that’s saved.', 'Bien, eso quedó guardado.'), 2600);
   }
+  updateProgress();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Progress: a plain, persistent strip (deliberately not a chunky "gamified" bar - research on web
+// survey drop-off found a bare progress indicator alone does not reliably reduce it, but pairing a
+// simple one with occasional encouraging feedback does, and that plain feedback, not competitive
+// framing, is what helps a long form feel like a conversation instead of a test). Measured against
+// the ordinary required-feeling sections only - the collapsed "only if this applies to you" group is
+// left out of the denominator on purpose, since most growers will finish having never opened it, and
+// counting it would make "done" feel unreachable for the common case. Milestones fire at most once
+// each, ever, so they can never become the noise the checkmark-toast comment above already guards against.
+const PROGRESS_SECTIONS = SECTIONS.filter(s => s.enabled && s.group !== 'optional').map(s => s.id);
+const PROGRESS_MILESTONES = [
+  [0.25, 'Good start.', 'Buen comienzo.'],
+  [0.5, 'Halfway there.', 'Va por la mitad.'],
+  [0.75, 'Almost there.', 'Ya casi.'],
+  [1, 'All the main sections are filled in. Check everything looks right, then submit.', 'Completó todas las secciones principales. Revise que todo esté bien, y luego envíe.'],
+];
+const progressMilestonesShown = new Set();
+function updateProgress() {
+  const bar = $('#progress-bar');
+  if (!bar) return;
+  const done = PROGRESS_SECTIONS.filter(id => document.getElementById('sec-' + id)?.classList.contains('sec-complete')).length;
+  const frac = PROGRESS_SECTIONS.length ? done / PROGRESS_SECTIONS.length : 0;
+  bar.style.width = (frac * 100).toFixed(0) + '%';
+  for (const [at, en, es] of PROGRESS_MILESTONES) {
+    if (frac >= at && !progressMilestonesShown.has(at)) {
+      progressMilestonesShown.add(at);
+      showToast(T(en, es), 3200);
+    }
+  }
 }
 document.addEventListener('change', e => { const c = e.target.closest('.card'); if (c) checkSectionCompletion(c); });
 document.addEventListener('input', e => { const c = e.target.closest('.card'); if (c) checkSectionCompletion(c); });
@@ -609,14 +641,37 @@ document.addEventListener('change', e => {
     ensureMachinePass('plant:' + pd[1],
       'Planting date noted - if you planted by machine, add it under Machines and field passes below.',
       'Anotamos la fecha de siembra - si sembró con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.',
-      {type: 'row crop planter', label: T('Planting', 'Siembra')});
+      {type: 'row crop planter', label: T('Cash crop planting', 'Siembra del cultivo comercial')});
   }
   const hd = /^q-management-(\d+)-harvestDate$/.exec(t.id || '');
   if (hd && t.value) {
     ensureMachinePass('harvest:' + hd[1],
       'Harvest date noted - if you harvested by machine, add it under Machines and field passes below.',
       'Anotamos la fecha de cosecha - si cosechó con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.',
-      {type: 'combine', label: T('Harvest', 'Cosecha')});
+      {type: 'combine', label: T('Cash crop harvest', 'Cosecha del cultivo comercial')});
+  }
+  const cpd = /^q-management-(\d+)-coverPlantDate$/.exec(t.id || '');
+  if (cpd && t.value) {
+    ensureMachinePass('coverplant:' + cpd[1],
+      'Cover crop planting date noted - if you seeded it by machine, add it under Machines and field passes below.',
+      'Anotamos la fecha de siembra del cultivo de cobertura - si lo sembró con máquina, agréguela en Maquinaria y pasadas por el lote, más abajo.',
+      {type: 'grain drill', label: T('Cover crop planting', 'Siembra del cultivo de cobertura')});
+  }
+  // coverEndMethod (not coverEndDate) is the trigger, not because it comes first in the form, but
+  // because it is the only place the grower tells us whether a machine was even involved: grazed and
+  // frost-killed cover crops use none, and a herbicide kill already gets its own machine pass from the
+  // Pesticides "applied by machine" tick above - adding a second one here would just be a confusing
+  // duplicate for the same trip across the field.
+  const cem = /^q-management-(\d+)-coverEndMethod$/.exec(t.id || '');
+  if (cem && t.value) {
+    const type = {'Rolled or crimped': 'roller packer', 'Mowed': 'mowing - disc mower', 'Tilled in': 'disc harrow',
+      'Harvested for hay or silage': 'mower-conditioner'}[t.value];
+    if (type) {
+      ensureMachinePass('coverend:' + cem[1],
+        'Cover crop termination noted - added a line under Machines and field passes for the equipment.',
+        'Anotamos la terminación del cultivo de cobertura - agregamos una línea en Maquinaria y pasadas por el lote para el equipo.',
+        {type, label: T('Cover crop termination', 'Terminación del cultivo de cobertura')});
+    }
   }
 });
 function addLanduse(i) {
