@@ -117,7 +117,9 @@ for (const sec of SECTIONS) {
     ? `<label class="tickfield nonetick"><input type="checkbox" id="none-${sec.id}"><span>${bi(sec.noneTick[0], sec.noneTick[1])}</span></label>` : '';
   card.innerHTML = `<h2>${bi(sec.title, sec.titleEs)}<span class="sec-check" aria-hidden="true">✓</span></h2>` +
     (sec.why ? `<p class="sec-why">${bi(sec.why, sec.whyEs)}</p>` : '') +
-    (sec.banner ? `<div class="lu-banner" id="lu-banner"></div>` : '') + none + `<div class="instances"></div>`;
+    (sec.banner ? `<div class="lu-banner" id="lu-banner"></div>` : '') +
+    (sec.id === 'management' ? `<div class="ndvi-banner" id="ndvi-banner"></div>` : '') +
+    none + `<div class="instances"></div>`;
   const list = card.querySelector('.instances');
   fillInstances(sec, list);
   if (sec.repeatable) {
@@ -600,6 +602,77 @@ document.addEventListener('click', e => {
   else if (b.dataset.act === 'add-lu') addLanduse(+b.dataset.i);
 });
 document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#sec-landchange')) renderSuggestions(); });
+
+// ---------------------------------------------------------------------------------------------
+// NDVI (satellite greenness) timeline. Deliberately opt-in, unlike the soil/land-use chips: this is
+// a real Sentinel-2 query, not a fast cached lookup, and can genuinely take up to a minute. Shows a
+// small chart plus whatever the phenology model estimated for this season, both purely a starting
+// point for the planting/harvest dates above - never written in without a tap, same as every other
+// suggestion on this page.
+const ndviState = {status: 'idle', data: null};
+function ndviChartSvg(series) {
+  const usable = (series || []).filter(p => p.usable && p.ndvi != null);
+  if (usable.length < 2) return `<p class="hint">${esc(T('Not enough clear satellite looks to draw a chart for this window.', 'No hay suficientes lecturas satelitales claras para dibujar un gráfico en esta ventana.'))}</p>`;
+  const W = 280, H = 110, pad = 8;
+  const times = usable.map(p => new Date(p.date + 'T00:00:00Z').getTime());
+  const t0 = Math.min(...times), t1 = Math.max(...times) || t0 + 1;
+  const x = t => pad + (W - 2 * pad) * (t - t0) / Math.max(1, t1 - t0);
+  const y = v => H - pad - (H - 2 * pad) * Math.max(0, Math.min(1, v));
+  const d = usable.map((p, i) => `${i ? 'L' : 'M'}${x(new Date(p.date + 'T00:00:00Z').getTime()).toFixed(1)},${y(p.ndvi).toFixed(1)}`).join('');
+  const dots = usable.map(p => `<circle cx="${x(new Date(p.date + 'T00:00:00Z').getTime()).toFixed(1)}" cy="${y(p.ndvi).toFixed(1)}" r="2" fill="#3f7d3f"/>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="ndvi-svg" role="img" aria-label="${esc(T('Satellite greenness (NDVI) over time', 'Verdor satelital (NDVI) a lo largo del tiempo'))}"><path d="${d}" fill="none" stroke="#3f7d3f" stroke-width="1.5"/>${dots}</svg>`;
+}
+function ndviBannerHtml() {
+  if (ndviState.status === 'idle') {
+    return `<button type="button" class="ghost" id="ndvi-load">${esc(T('Load satellite greenness chart (optional)', 'Cargar gráfico satelital de verdor (opcional)'))}</button>` +
+      `<div class="hint fh">${esc(T('Uses real satellite imagery for this exact field - can take up to a minute.', 'Usa imágenes satelitales reales de este lote - puede tardar hasta un minuto.'))}</div>`;
+  }
+  if (ndviState.status === 'loading') {
+    return `<div class="chip loading">${esc(T('Reading satellite imagery for this field… this can take up to a minute.', 'Leyendo imágenes satelitales de este lote… puede tardar hasta un minuto.'))}</div>`;
+  }
+  if (ndviState.status === 'error') {
+    return quietChip('Could not load the satellite chart right now.', 'No se pudo cargar el gráfico satelital ahora.') +
+      `<button type="button" class="ghost" id="ndvi-load">${esc(T('Try again', 'Intentar de nuevo'))}</button>`;
+  }
+  const d = ndviState.data, ph = d && d.phenology;
+  const chart = ndviChartSvg(d && d.series);
+  let seasonHtml = '';
+  if (ph && ph.seasons && ph.seasons.length) {
+    seasonHtml = ph.seasons.map((s, i) => `<div class="hint fh"><b>${esc(T(`Season ${i + 1}`, `Temporada ${i + 1}`))}</b>: ${esc(T(`greening up around ${s.sos || '?'}, peak around ${s.peak_date || '?'}, senescence around ${s.eos || '?'}`, `verdeo alrededor de ${s.sos || '?'}, pico alrededor de ${s.peak_date || '?'}, senescencia alrededor de ${s.eos || '?'}`))} (${esc(s.confidence)})</div>` +
+      `<div class="chip-actions">${s.sos ? `<button type="button" class="ghost small" data-act="use-ndvi-date" data-field="plantDate" data-date="${esc(s.sos)}">${esc(T('Use as planting date', 'Usar como fecha de siembra'))}</button>` : ''}${s.eos ? `<button type="button" class="ghost small" data-act="use-ndvi-date" data-field="harvestDate" data-date="${esc(s.eos)}">${esc(T('Use as harvest date', 'Usar como fecha de cosecha'))}</button>` : ''}</div>`
+    ).join('');
+  } else if (ph) {
+    seasonHtml = `<div class="hint fh">${esc(T('Not enough clear satellite looks to detect a season for this window.', 'No hay suficientes lecturas satelitales claras para detectar una temporada en esta ventana.'))}</div>`;
+  }
+  return `<div class="chip done">${chipHead()}${chart}${seasonHtml}<div class="hint fh">${esc(T('Modeled from Sentinel-2 satellite data, not a field record - dates are week-scale estimates.', 'Modelado a partir de datos satelitales Sentinel-2, no un registro de campo - las fechas son estimaciones aproximadas.'))}</div></div>`;
+}
+function renderNdviBanner() { const b = $('#ndvi-banner'); if (b) b.innerHTML = ndviBannerHtml(); }
+langHooks.push(renderNdviBanner);
+async function loadNdvi() {
+  if (ring.length < 3) { showToast(T('Draw the field boundary first.', 'Primero dibuje el perímetro del lote.')); return; }
+  ndviState.status = 'loading'; renderNdviBanner();
+  const ringParam = [...ring, ring[0]].map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(';');
+  const plantVal = document.getElementById('q-management-0-plantDate')?.value;
+  const harvestVal = document.getElementById('q-management-0-harvestDate')?.value;
+  const params = new URLSearchParams({ring: ringParam});
+  if (plantVal) { params.set('start', plantVal); params.set('end', harvestVal || new Date().toISOString().slice(0, 10)); }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 65000);
+  try {
+    const r = await fetch(`/api/ndvi?${params}`, {signal: ctrl.signal});
+    const j = await r.json();
+    if (!j.ok || j.error) ndviState.status = 'error'; else { ndviState.status = 'done'; ndviState.data = j; }
+  } catch { ndviState.status = 'error'; }
+  finally { clearTimeout(timer); renderNdviBanner(); }
+}
+document.addEventListener('click', e => {
+  if (e.target.closest('#ndvi-load')) loadNdvi();
+  const b = e.target.closest('[data-act="use-ndvi-date"]');
+  if (b) {
+    const el = document.getElementById(`q-management-0-${b.dataset.field}`);
+    if (el) { el.value = b.dataset.date; el.dispatchEvent(new Event('change', {bubbles: true})); scheduleDraftSave(); showToast(T('Filled in. Check it looks right.', 'Completado. Revise que esté bien.'), 3000); }
+  }
+});
 document.addEventListener('input', e => {
   const m = /^q-landchange-(\d+)-(pctAffected|areaAffected-amt|areaAffected-unit)$/.exec(e.target.id || '');
   if (!m) return;
