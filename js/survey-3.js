@@ -412,6 +412,48 @@ function useSoil() {
 const isEmptyInstance = inst => ![...inst.querySelectorAll('input,select')].some(el => el.type === 'checkbox' ? el.checked : el.value);
 
 // ---------------------------------------------------------------------------------------------
+// Fertilizer type -> %N-form / %P2O5 / %K2O auto-fill. Picking a standard product from the list
+// already names its chemistry, so asking the grower to also retype well-known composition numbers
+// is pure friction - and, per the section's own hint text, most growers are told to leave these
+// boxes blank for a standard product, which meant the numbers just never got captured at all. Only
+// products with a single unambiguous, brand-independent split are mapped here (straight chemistry:
+// ammonium nitrate and calcium ammonium nitrate are exactly 50/50 ammonium/nitrate by definition,
+// UAN is the well-known 25/25/50 ammonium/nitrate/urea split, DAP/MAP are 100% ammonium-N).
+// Compound NPKs, ammonium sulphate nitrate and every manure/digestate/compost are deliberately left
+// out - their split is brand- or mineralization-dependent, and a wrong auto-filled number would be
+// worse than an honestly blank one. Only fills fields the grower has not already typed into.
+const FERT_NSPLIT = {
+  'Ammonium nitrate - 33.5% N (granulated)': {ammonium: 50, nitrate: 50},
+  'Ammonium nitrate - 33.5% N (prilled)': {ammonium: 50, nitrate: 50},
+  'Ammonium sulphate - 21% N': {ammonium: 100},
+  'Anhydrous ammonia - 82% N': {ammonium: 100},
+  'Calcium ammonium nitrate - 27% N': {ammonium: 50, nitrate: 50},
+  'Calcium nitrate - 15.5% N': {nitrate: 100},
+  'Diammonium phosphate - 18% N / 46% P205': {ammonium: 100, p2o5: 46},
+  'Monoammonium phosphate - 11% N / 52% P2O5': {ammonium: 100, p2o5: 52},
+  'Muriate of potash / Potassium chloride - 60% K20': {k2o: 60},
+  'Phosphate/Rock Phosphate - 32% P205': {p2o5: 32},
+  'Polyhalite - 48% SO3/14% K20/6% MgO/17% CaO': {k2o: 14},
+  'Potassium nitrate - crystallized (caliche method)': {nitrate: 100},
+  'Potassium sulphate - 50% K20 / 45% S03': {k2o: 50},
+  'Super phosphate - 21% P205': {p2o5: 21},
+  'Triple super phosphate - 48% P205': {p2o5: 48},
+  'Urea - 46% N': {urea: 100},
+  'Urea ammonium nitrate solution - 32% N': {ammonium: 25, nitrate: 25, urea: 50},
+};
+document.addEventListener('change', e => {
+  const m = /^q-fert-(\d+)-type$/.exec(e.target.id || '');
+  if (!m) return;
+  const split = FERT_NSPLIT[e.target.value];
+  if (!split) return;
+  const fieldOf = k => ({ammonium: 'pctAmmonium', nitrate: 'pctNitrate', urea: 'pctUrea', p2o5: 'pctP2O5', k2o: 'pctK2O'})[k];
+  for (const [k, v] of Object.entries(split)) {
+    const el = document.getElementById(`q-fert-${m[1]}-${fieldOf(k)}`);
+    if (el && !el.value) { el.value = String(v); syncPctSlider(el); }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
 // Machine-pass auto-populate. Fertilizing, spraying, tillage and planting almost always mean a
 // machine went over the field, but Machines and field passes is its own section the grower has to
 // remember to open separately. Rather than guess which exact machine (the lists don't map 1:1), a
@@ -428,7 +470,17 @@ function ensureMachinePass(triggerKey, en, es) {
   const inst = renderInstance(sec, sectionCounters.machine++);
   list.appendChild(inst);
   applyFieldDeps(inst);
-  showToast(T(en, es), 4500);
+  showToast(T(en, es), 5500);
+  // A toast alone can be missed if the grower is looking at a field far from Machines and field passes
+  // (this was reported as "I checked the box and nothing happened," even though the line WAS added -
+  // it was just off-screen and easy to not notice as new). Deliberately NOT auto-scrolling there: that
+  // would yank the grower away from the field they are actively filling in (they likely still have more
+  // to enter right where they are). Instead, a lingering highlight on the new card and on the section
+  // title itself means whenever they do scroll down, it is unmistakable that something new appeared.
+  inst.classList.add('auto-added');
+  const card = document.getElementById('sec-machine');
+  if (card) card.classList.add('auto-added-flash');
+  setTimeout(() => { inst.classList.remove('auto-added'); if (card) card.classList.remove('auto-added-flash'); }, 6000);
 }
 document.addEventListener('change', e => {
   const t = e.target;

@@ -205,7 +205,7 @@ const SECTIONS = [
     {id: 'method', q: 'How it was applied', qEs: 'Cómo se aplicó', kind: 'select', options: FERT_METHOD},
     {id: 'methodOther', q: 'If your method is not listed, describe it', qEs: 'Si su método no está en la lista, descríbalo', kind: 'text'},
     {id: 'pctAmmonium', q: '%N as ammonium', qEs: '%N como amonio', kind: 'percent', full: true,
-      hint: 'Only if you mix your own blend: use the analysis printed on the bag or lab sheet (for example 20-10-10). If you bought a standard product from the list above, leave this and the next four boxes blank.', hintEs: 'Solo si usted prepara su propia mezcla: use el análisis que figura en la bolsa o en el informe (por ejemplo 20-10-10). Si compró un producto estándar de la lista de arriba, deje esta casilla y las cuatro siguientes en blanco.'},
+      hint: 'Fills in by itself for common products once you pick a Fertilizer type above. If you mix your own blend, use the analysis printed on the bag or lab sheet (for example 20-10-10) instead.', hintEs: 'Se completa sola para los productos comunes una vez que elige un Tipo de fertilizante arriba. Si prepara su propia mezcla, use el análisis que figura en la bolsa o en el informe (por ejemplo 20-10-10).'},
     {id: 'pctNitrate', q: '%N as nitrate', qEs: '%N como nitrato', kind: 'percent'},
     {id: 'pctUrea', q: '%N as urea', qEs: '%N como urea', kind: 'percent'},
     {id: 'pctP2O5', q: '%P2O5 (phosphorus)', qEs: '%P2O5 (fósforo)', kind: 'percent'},
