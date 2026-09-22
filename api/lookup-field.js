@@ -28,6 +28,10 @@ module.exports = async (req, res) => {
     return;
   }
   try {
+    // Self-healing, same as submit.js's own ALTER TABLE - this endpoint cannot assume a submission has
+    // already run since this deploy went live and created the column for it (seen live: the first
+    // lookup after deploying this feature hit the table before any new submission had run).
+    await sql`ALTER TABLE survey_submissions ADD COLUMN IF NOT EXISTS field_code TEXT`;
     await sql`CREATE TABLE IF NOT EXISTS lookup_field_attempts (at TIMESTAMPTZ NOT NULL DEFAULT now())`;
     const guard = (await sql`SELECT count(*)::int AS n FROM lookup_field_attempts WHERE at > now() - interval '1 hour'`).rows[0];
     if (guard.n >= MAX_LOOKUPS_PER_HOUR) {
