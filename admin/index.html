@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-U+OTRdcI83n2dmx2ahsOT0rWuXBvZPicjNilott0YA8='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xSlQEbVpZSg2jJSLMsKud06jCOYBxrRBFRI2cgzVh8w=' 'sha256-io8vAKa9zYvQB4vnBO9AEAn/AVAz4kd+KmG31IoeLHA='; style-src 'sha256-z6bFvSgtRax6qGj6Ikp6BDtshszjA9QWSvlD7jXLrrk='; img-src data: https://tile.openstreetmap.org; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Adams Survey Submissions</title>
 <script>try{var l=localStorage.getItem('adams-survey-lang');if(l!=='en'&&l!=='es')l=/^es/i.test(navigator.language||'')?'es':'en';document.documentElement.lang=l}catch(e){}</script>
 <style>
@@ -123,10 +123,12 @@
     <div class="bar">
       <span class="grow" id="count"></span>
       <input class="find" id="find" type="search" data-ph-en="Search farm, field, contact, buyer, country" data-ph-es="Buscar finca, campo, contacto, comprador, país" placeholder="Search farm, field, contact, buyer, country" aria-label="Search">
+      <button class="ghost" id="dashboard-toggle" type="button"><span data-l="en">Dashboard</span><span data-l="es">Panel resumen</span></button>
       <button class="ghost" id="csv" type="button"><span data-l="en">Export list (CSV)</span><span data-l="es">Exportar lista (CSV)</span></button>
       <button class="ghost" id="refresh" type="button"><span data-l="en">Refresh</span><span data-l="es">Actualizar</span></button>
       <button class="ghost" id="signout" type="button"><span data-l="en">Sign out</span><span data-l="es">Cerrar sesión</span></button>
     </div>
+    <div id="dashboard" hidden></div>
     <p id="msg" role="status"></p>
     <div id="list"></div>
     <div class="bar"><button class="ghost" id="more" type="button" hidden><span data-l="en">Load older submissions</span><span data-l="es">Cargar envíos anteriores</span></button></div>
@@ -605,6 +607,8 @@ function applyLang() {
   document.title = T('Adams Survey Submissions', 'Envíos de la encuesta Adams');
   paintMsg(); paintLogin();
   if (!$('#app').hidden) renderList();
+  $('#dashboard-toggle').textContent = T(dashboardOpen ? 'Hide dashboard' : 'Dashboard', dashboardOpen ? 'Ocultar panel' : 'Panel resumen');
+  if (dashboardOpen && dashboardData) $('#dashboard').innerHTML = dashboardHtml(dashboardData);
 }
 $$('.lang-btn').forEach(b => b.onclick = () => {
   LANG = b.dataset.lang === 'es' ? 'es' : 'en';
@@ -657,6 +661,61 @@ async function loadMore() {
     setMsg('Could not load more. ' + f.en, 'No se pudo cargar más. ' + f.es, true);
   } finally { setBusy(false); }
 }
+// ---- dashboard: acres/volume tallied by crop and by supplier, across EVERY submission (not just the
+// paginated list) - api/dashboard.js does the aggregation server-side for exactly that reason. -------
+let dashboardData = null, dashboardOpen = false, dashboardLoading = false;
+async function apiDashboard() {
+  let r;
+  try { r = await fetch('/api/dashboard', {headers: {Authorization: 'Bearer ' + pw}, cache: 'no-store'}); }
+  catch { const e = new Error('offline'); e.code = 'net'; throw e; }
+  let j = null;
+  try { j = await r.json(); } catch {}
+  if (!r.ok || !j || !j.ok) { const e = new Error((j && j.error) || ('HTTP ' + r.status)); e.code = r.status; throw e; }
+  return j;
+}
+const fmtNum = n => Number(n).toLocaleString(LANG === 'es' ? 'es' : 'en-US', {maximumFractionDigits: 1});
+function volumeHtml(volume) {
+  if (!volume || !volume.length) return `<span class="muted">${esc(T('none reported', 'sin datos'))}</span>`;
+  return volume.map(v => `${fmtNum(v.amount)} ${esc(v.unit)}`).join(', ');
+}
+function dashboardHtml(d) {
+  const cropRows = d.byCrop.map(c => `<tr><td>${esc(c.crop)}</td><td>${fmtNum(c.acres)}</td><td>${c.fields}</td><td>${volumeHtml(c.volume)}</td></tr>`).join('');
+  const supplierRows = d.bySupplier.map(s => `<tr><td>${esc(s.supplier)}</td><td>${fmtNum(s.acres)}</td><td>${s.fields}</td><td>${esc(s.crops.join(', '))}</td><td>${volumeHtml(s.volume)}</td></tr>`).join('');
+  const gaps = [];
+  if (d.noCrop) gaps.push(T(`${d.noCrop} submission${d.noCrop === 1 ? '' : 's'} with no crop selected`, `${d.noCrop} envío${d.noCrop === 1 ? '' : 's'} sin cultivo seleccionado`));
+  if (d.noBuyer) gaps.push(T(`${d.noBuyer} with no buyer/exporter given`, `${d.noBuyer} sin comprador/exportador`));
+  if (d.noBoundary) gaps.push(T(`${d.noBoundary} with no usable field boundary`, `${d.noBoundary} sin un perímetro de lote utilizable`));
+  return `
+    <p class="hint">${esc(T(`${d.totalSubmissions} submission${d.totalSubmissions === 1 ? '' : 's'} total. "Volume" is what the grower reported selling to Adams/their exporter (optional field) - shown per unit as entered, not converted or combined across units. Supplier grouping is by exact name as typed (trimmed, case-insensitive); typo'd variants may still split into separate rows.`,
+      `${d.totalSubmissions} envío${d.totalSubmissions === 1 ? '' : 's'} en total. El "volumen" es lo que el productor indicó que vendió a Adams o a su exportador (campo opcional) - se muestra por unidad tal como se ingresó, sin convertir ni combinar entre unidades. Los proveedores se agrupan por el nombre exacto escrito (recortado, sin distinguir mayúsculas); variantes con errores de tipeo pueden seguir apareciendo por separado.`))}</p>
+    ${gaps.length ? `<p class="hint muted">${esc(gaps.join(' · '))}</p>` : ''}
+    <h3>${esc(T('By crop', 'Por cultivo'))}</h3>
+    ${d.byCrop.length ? `<table class="tbl"><thead><tr><th>${esc(T('Crop', 'Cultivo'))}</th><th>${esc(T('Acres', 'Acres'))}</th><th>${esc(T('Fields', 'Lotes'))}</th><th>${esc(T('Volume sold (as reported)', 'Volumen vendido (según lo informado)'))}</th></tr></thead><tbody>${cropRows}</tbody></table>` : `<p class="muted">${esc(T('No data yet.', 'Todavía no hay datos.'))}</p>`}
+    <h3>${esc(T('By supplier / exporter', 'Por comprador / exportador'))}</h3>
+    ${d.bySupplier.length ? `<table class="tbl"><thead><tr><th>${esc(T('Supplier', 'Comprador'))}</th><th>${esc(T('Acres', 'Acres'))}</th><th>${esc(T('Fields', 'Lotes'))}</th><th>${esc(T('Crops', 'Cultivos'))}</th><th>${esc(T('Volume sold (as reported)', 'Volumen vendido (según lo informado)'))}</th></tr></thead><tbody>${supplierRows}</tbody></table>` : `<p class="muted">${esc(T('No data yet.', 'Todavía no hay datos.'))}</p>`}
+  `;
+}
+async function loadDashboard() {
+  const el = $('#dashboard');
+  if (dashboardLoading) return;
+  dashboardLoading = true;
+  el.innerHTML = `<p class="muted">${esc(T('Loading…', 'Cargando…'))}</p>`;
+  try {
+    dashboardData = await apiDashboard();
+    el.innerHTML = dashboardHtml(dashboardData);
+  } catch (err) {
+    handleAuth(err);
+    const f = friendly(err);
+    el.innerHTML = `<p class="bad">${esc(T('Could not load the dashboard. ', 'No se pudo cargar el panel. ') + T(f.en, f.es))}</p>`;
+  } finally { dashboardLoading = false; }
+}
+$('#dashboard-toggle').onclick = () => {
+  dashboardOpen = !dashboardOpen;
+  $('#dashboard').hidden = !dashboardOpen;
+  $('#dashboard-toggle').textContent = T(dashboardOpen ? 'Hide dashboard' : 'Dashboard', dashboardOpen ? 'Ocultar panel' : 'Panel resumen');
+  if (dashboardOpen && !dashboardData) loadDashboard();
+};
+
 $('#loginForm').addEventListener('submit', e => {
   e.preventDefault();
   pw = $('#pw').value.trim();
