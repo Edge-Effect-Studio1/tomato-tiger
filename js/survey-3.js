@@ -720,17 +720,61 @@ const MONTH_ABBR_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oc
 // three NDVI gridlines (0 = bare ground, 0.5, 1.0 = full dense canopy); bottom margin carries one
 // month tick per calendar month in range (thinned to every 2nd/3rd if the window is long, so labels
 // never overlap).
-function ndviChartSvg(series) {
+// Stage colors: a port of the same NASA Harvest / Agmatix bare(A)/green-up(B)/peak(C)/senescence(D)/
+// residue(E) frame phenology.js already computes (its own header comment names the source model) - the
+// chart just never drew any of it before. Bare/residue share one neutral (phenology.js reports them
+// together as bare_periods, code 'A/E'); B/C/D come from each season's own stages[]. Palette validated
+// with the dataviz skill's validate_palette.js against this chip's real background (#e8f2e0, `.chip.done`):
+// CVD adjacent-pair and normal-vision floors both clear with room (worst pair dE 15.0/18.8, target 8/15).
+// The one deliberate exception is the bare/residue gray's chroma, which reads as gray by design - bare
+// ground has no strong hue in reality, and that's mitigated the way the skill requires: a text-labeled
+// legend, never color alone, per stage.
+const STAGE_FILL = {B: '#7ab84f', C: '#206b20', D: '#c98a1f'};
+const STAGE_OPACITY = {B: 0.5, C: 0.42, D: 0.5};
+const BARE_FILL = '#867c6d', BARE_OPACITY = 0.45;
+const NDVI_LEGEND = [[BARE_FILL, 'Bare ground', 'Suelo desnudo'], [STAGE_FILL.B, 'Green-up', 'Verdeo'],
+  [STAGE_FILL.C, 'Peak', 'Pico'], [STAGE_FILL.D, 'Drying down', 'Secado']];
+function ndviChartSvg(series, phenology) {
   const usable = (series || []).filter(p => p.usable && p.ndvi != null);
   if (usable.length < 2) return `<p class="hint">${esc(T('Not enough clear satellite looks to draw a chart for this window.', 'No hay suficientes lecturas satelitales claras para dibujar un gráfico en esta ventana.'))}</p>`;
   const W = 300, H = 130, padL = 26, padR = 8, padT = 8, padB = 18;
   const plotW = W - padL - padR, plotH = H - padT - padB;
-  const times = usable.map(p => new Date(p.date + 'T00:00:00Z').getTime());
+  const t = iso => new Date(iso + 'T00:00:00Z').getTime();
+  const times = usable.map(p => t(p.date));
   const t0 = Math.min(...times), t1 = Math.max(...times) || t0 + 1;
-  const x = t => padL + plotW * (t - t0) / Math.max(1, t1 - t0);
+  const x = tm => padL + plotW * (tm - t0) / Math.max(1, t1 - t0);
+  const xClamped = tm => Math.max(padL, Math.min(W - padR, x(tm)));
   const y = v => padT + plotH - plotH * Math.max(0, Math.min(1, v));
-  const d = usable.map((p, i) => `${i ? 'L' : 'M'}${x(new Date(p.date + 'T00:00:00Z').getTime()).toFixed(1)},${y(p.ndvi).toFixed(1)}`).join('');
-  const dots = usable.map(p => `<circle cx="${x(new Date(p.date + 'T00:00:00Z').getTime()).toFixed(1)}" cy="${y(p.ndvi).toFixed(1)}" r="2" fill="#3f7d3f"/>`).join('');
+  // Linear-interpolate the drawn line's own value at an arbitrary date, so a milestone marker lands
+  // exactly on the curve rather than floating off it if the nearest real satellite look is a few days
+  // away. More than ~25 days from any usable look and the date is treated as outside the observed
+  // window - never guessed.
+  const valueAt = iso => {
+    if (!iso) return null;
+    const target = t(iso);
+    if (target < t0 - 25 * 86400000 || target > t1 + 25 * 86400000) return null;
+    let lo = null, hi = null;
+    for (const p of usable) { const pt = t(p.date); if (pt <= target) lo = p; if (pt >= target && !hi) hi = p; }
+    if (lo && hi && lo !== hi) { const tl = t(lo.date), th = t(hi.date); return lo.ndvi + (hi.ndvi - lo.ndvi) * (target - tl) / Math.max(1, th - tl); }
+    return (lo || hi) ? (lo || hi).ndvi : null;
+  };
+
+  // Bands drawn first (bottom of the z-order) so gridlines and the curve show through on top. A stage
+  // or bare period entirely outside the visible window, or missing a from/to (a partial/low-confidence
+  // season), is skipped rather than drawn wrong.
+  const bandRect = (fromIso, toIso, fill, opacity) => {
+    if (!fromIso || !toIso) return '';
+    const a = t(fromIso), b = t(toIso);
+    if (b <= t0 || a >= t1) return '';
+    const xa = xClamped(a), xb = xClamped(b);
+    return xb <= xa ? '' : `<rect x="${xa.toFixed(1)}" y="${padT}" width="${(xb - xa).toFixed(1)}" height="${plotH}" fill="${fill}" opacity="${opacity}"/>`;
+  };
+  const bands = [
+    ...((phenology && phenology.bare_periods) || []).map(bp => bandRect(bp.from, bp.to, BARE_FILL, BARE_OPACITY)),
+    ...((phenology && phenology.seasons) || []).flatMap(s => (s.stages || []).map(st => bandRect(st.from, st.to, STAGE_FILL[st.code], STAGE_OPACITY[st.code]))),
+  ].join('');
+
+  const d = usable.map((p, i) => `${i ? 'L' : 'M'}${x(t(p.date)).toFixed(1)},${y(p.ndvi).toFixed(1)}`).join('');
   const yTicks = [0, 0.5, 1].map(v => `<line x1="${padL}" x2="${W - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#d8d8c8" stroke-width="1"/>` +
     `<text x="${padL - 4}" y="${(y(v) + 3).toFixed(1)}" font-size="9" fill="#5f6350" text-anchor="end">${v.toFixed(1)}</text>`).join('');
   // One label per month boundary crossed, thinned so consecutive labels stay readably apart.
@@ -743,17 +787,47 @@ function ndviChartSvg(series) {
   }
   const monthSpan = (d1.getUTCFullYear() - d0.getUTCFullYear()) * 12 + (d1.getUTCMonth() - d0.getUTCMonth()) + 1;
   const everyNth = monthSpan > 8 ? 3 : monthSpan > 5 ? 2 : 1;
-  const xTicks = monthMarks.filter((_, i) => i % everyNth === 0).map(t => {
-    const dt = new Date(t);
+  const xTicks = monthMarks.filter((_, i) => i % everyNth === 0).map(tm => {
+    const dt = new Date(tm);
     const label = T(MONTH_ABBR_EN[dt.getUTCMonth()], MONTH_ABBR_ES[dt.getUTCMonth()]);
-    const xp = x(t).toFixed(1);
+    const xp = x(tm).toFixed(1);
     return `<line x1="${xp}" x2="${xp}" y1="${padT}" y2="${padT + plotH}" stroke="#eeeede" stroke-width="1"/>` +
       `<text x="${xp}" y="${H - 4}" font-size="9" fill="#5f6350" text-anchor="middle">${esc(label)}</text>`;
   }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" class="ndvi-svg" role="img" aria-label="${esc(T('Satellite greenness (NDVI) over time', 'Verdor satelital (NDVI) a lo largo del tiempo'))}">` +
-    `${yTicks}${xTicks}<path d="${d}" fill="none" stroke="#3f7d3f" stroke-width="1.5"/>${dots}` +
+
+  // Milestone markers - shape-coded, not just color-coded, so green-up/peak/dry-down stay tellable
+  // apart under colorblindness: upward triangle = green-up (sos), diamond = peak, downward triangle =
+  // dry-down (eos). These are the exact three dates the text below already names and the "Use as
+  // planting/harvest date" buttons already act on - now visible on the chart itself, not only in a
+  // sentence below it. A cream halo keeps them legible sitting on top of a stage band.
+  const tri = (cx, cy, up) => `M${cx.toFixed(1)},${(cy + (up ? -3.2 : 3.2)).toFixed(1)} L${(cx - 3.2).toFixed(1)},${(cy + (up ? 3.2 : -3.2)).toFixed(1)} L${(cx + 3.2).toFixed(1)},${(cy + (up ? 3.2 : -3.2)).toFixed(1)} Z`;
+  const diamond = (cx, cy) => `M${cx.toFixed(1)},${(cy - 3.4).toFixed(1)} L${(cx + 3.4).toFixed(1)},${cy.toFixed(1)} L${cx.toFixed(1)},${(cy + 3.4).toFixed(1)} L${(cx - 3.4).toFixed(1)},${cy.toFixed(1)} Z`;
+  const marker = path => `<path d="${path}" fill="#3f7d3f" stroke="#fbfbf5" stroke-width="0.75"/>`;
+  const milestones = ((phenology && phenology.seasons) || []).flatMap(s => {
+    const add = (iso, shape) => { const v = valueAt(iso); if (v == null) return ''; const px = xClamped(t(iso)), py = y(v);
+      return marker(shape === 'up' ? tri(px, py, true) : shape === 'down' ? tri(px, py, false) : diamond(px, py)); };
+    return [add(s.sos, 'up'), add(s.peak_date, 'diamond'), add(s.eos, 'down')].filter(Boolean);
+  }).join('');
+  const label = milestones ? T('Satellite greenness (NDVI) over time, with stage colors and green-up/peak/dry-down markers', 'Verdor satelital (NDVI) a lo largo del tiempo, con colores de etapa y marcadores de verdeo/pico/secado')
+    : T('Satellite greenness (NDVI) over time', 'Verdor satelital (NDVI) a lo largo del tiempo');
+  return `<svg viewBox="0 0 ${W} ${H}" class="ndvi-svg" role="img" aria-label="${esc(label)}">` +
+    `${bands}${yTicks}${xTicks}<path d="${d}" fill="none" stroke="#3f7d3f" stroke-width="1.5"/>${milestones}` +
     `<line x1="${padL}" x2="${padL}" y1="${padT}" y2="${padT + plotH}" stroke="#5f6350" stroke-width="1"/>` +
     `<line x1="${padL}" x2="${W - padR}" y1="${padT + plotH}" y2="${padT + plotH}" stroke="#5f6350" stroke-width="1"/></svg>`;
+}
+function ndviLegendHtml(ph) {
+  if (!ph || !ph.seasons || !ph.seasons.length) return '';
+  return `<div class="ndvi-legend hint fh">${NDVI_LEGEND.map(([hex, en, es]) =>
+    `<span class="ndvi-swatch" style="background:${hex}"></span>${esc(T(en, es))}`).join(' &nbsp; ')}</div>`;
+}
+const NDVI_PATTERN_TEXT = {
+  double: ['This field greened up twice this year - likely two plantings.', 'Este lote reverdeció dos veces este año - probablemente dos siembras.'],
+  'multi-cut/perennial': ['This field greened up several times this year - typical of hay, forage, or a crop that gets cut more than once.', 'Este lote reverdeció varias veces este año - típico de heno, forraje, o un cultivo que se corta más de una vez.'],
+  multiple: ['This field shows more than one growing cycle this year.', 'Este lote muestra más de un ciclo de crecimiento este año.'],
+};
+function ndviPatternHtml(ph) {
+  const pair = ph && NDVI_PATTERN_TEXT[ph.pattern];
+  return pair ? `<div class="hint fh"><b>${esc(T(pair[0], pair[1]))}</b></div>` : '';
 }
 function ndviBannerHtml() {
   if (ndviState.status === 'idle') {
@@ -768,7 +842,9 @@ function ndviBannerHtml() {
       `<button type="button" class="ghost" id="ndvi-load">${esc(T('Try again', 'Intentar de nuevo'))}</button>`;
   }
   const d = ndviState.data, ph = d && d.phenology;
-  const chart = ndviChartSvg(d && d.series);
+  const chart = ndviChartSvg(d && d.series, ph);
+  const legendHtml = ndviLegendHtml(ph);
+  const patternHtml = ndviPatternHtml(ph);
   let seasonHtml = '';
   if (ph && ph.seasons && ph.seasons.length) {
     // "Senescence" is the model's own vocabulary (phenology.js), not a grower's - plain language here
@@ -799,7 +875,7 @@ function ndviBannerHtml() {
           `Found ${n} cloud-free looks ${range}, but no clear green-up-to-harvest pattern in that window. This is normal if the crop has not finished its cycle yet, or on ground that stays green year-round (pasture, alfalfa, orchard).`,
           `Se encontraron ${n} lecturas sin nubes ${range}, pero ningún patrón claro de siembra a cosecha en esa ventana. Es normal si el cultivo todavía no terminó su ciclo, o en terreno que se mantiene verde todo el año (pastura, alfalfa, huerto).`))}</div>`;
   }
-  return `<div class="chip done">${chipHead()}${chart}${seasonHtml}<div class="hint fh">${esc(T('Modeled from Sentinel-2 satellite data, not a field record - dates are week-scale estimates.', 'Modelado a partir de datos satelitales Sentinel-2, no un registro de campo - las fechas son estimaciones aproximadas.'))}</div></div>`;
+  return `<div class="chip done">${chipHead()}${chart}${legendHtml}${patternHtml}${seasonHtml}<div class="hint fh">${esc(T('Modeled from Sentinel-2 satellite data, not a field record - dates are week-scale estimates.', 'Modelado a partir de datos satelitales Sentinel-2, no un registro de campo - las fechas son estimaciones aproximadas.'))}</div></div>`;
 }
 function renderNdviBanner() { const b = $('#ndvi-banner'); if (b) b.innerHTML = ndviBannerHtml(); }
 langHooks.push(renderNdviBanner);
@@ -1457,7 +1533,7 @@ function renderReport() {
   const ndviEl = $('#report-ndvi');
   if (ndviEl) {
     ndviEl.innerHTML = ndviState.status === 'done' && ndviState.data
-      ? `<h2>${esc(T('Satellite greenness (NDVI)', 'Verdor satelital (NDVI)'))}</h2>${ndviChartSvg(ndviState.data.series)}`
+      ? `<h2>${esc(T('Satellite greenness (NDVI)', 'Verdor satelital (NDVI)'))}</h2>${ndviChartSvg(ndviState.data.series, ndviState.data.phenology)}${ndviLegendHtml(ndviState.data.phenology)}`
       : '';
   }
   $('#report-answers').innerHTML = reportAnswersHtml(b.answers, b.noneApplied);
