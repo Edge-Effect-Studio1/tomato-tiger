@@ -809,10 +809,17 @@ function ndviChartSvg(series, phenology) {
   const tri = (cx, cy, up) => `M${cx.toFixed(1)},${(cy + (up ? -4.2 : 4.2)).toFixed(1)} L${(cx - 4.2).toFixed(1)},${(cy + (up ? 4.2 : -4.2)).toFixed(1)} L${(cx + 4.2).toFixed(1)},${(cy + (up ? 4.2 : -4.2)).toFixed(1)} Z`;
   const diamond = (cx, cy) => `M${cx.toFixed(1)},${(cy - 4.4).toFixed(1)} L${(cx + 4.4).toFixed(1)},${cy.toFixed(1)} L${cx.toFixed(1)},${(cy + 4.4).toFixed(1)} L${(cx - 4.4).toFixed(1)},${cy.toFixed(1)} Z`;
   const marker = path => `<path d="${path}" fill="#3f7d3f" stroke="#fbfbf5" stroke-width="1"/>`;
-  const milestones = ((phenology && phenology.seasons) || []).flatMap(s => {
+  const seasonsArr = (phenology && phenology.seasons) || [];
+  const milestones = seasonsArr.flatMap((s, i) => {
     const add = (iso, shape) => { const v = valueAt(iso); if (v == null) return ''; const px = xClamped(t(iso)), py = y(v);
       return marker(shape === 'up' ? tri(px, py, true) : shape === 'down' ? tri(px, py, false) : diamond(px, py)); };
-    return [add(s.sos, 'up'), add(s.peak_date, 'diamond'), add(s.eos, 'down')].filter(Boolean);
+    // A back-to-back double-crop season shares its exact turnover day (phenology.js sets THIS season's
+    // eos and the NEXT one's sos to the same split point when there's no real gap between them) - two
+    // opposite-facing triangles at the same spot would draw on top of each other, not read as two
+    // markers. The next season's green-up triangle alone is enough to mark that shared day.
+    const next = seasonsArr[i + 1];
+    const sharedTurnover = next && s.eos && next.sos === s.eos;
+    return [add(s.sos, 'up'), add(s.peak_date, 'diamond'), sharedTurnover ? '' : add(s.eos, 'down')].filter(Boolean);
   }).join('');
   const label = milestones ? T('Satellite greenness (NDVI) over time, with stage colors and green-up/peak/dry-down markers', 'Verdor satelital (NDVI) a lo largo del tiempo, con colores de etapa y marcadores de verdeo/pico/secado')
     : T('Satellite greenness (NDVI) over time', 'Verdor satelital (NDVI) a lo largo del tiempo');
