@@ -759,20 +759,26 @@ function ndviChartSvg(series, phenology) {
     return (lo || hi) ? (lo || hi).ndvi : null;
   };
 
-  // Bands drawn first (bottom of the z-order) so gridlines and the curve show through on top. A stage
-  // or bare period entirely outside the visible window, or missing a from/to (a partial/low-confidence
-  // season), is skipped rather than drawn wrong.
-  const bandRect = (fromIso, toIso, fill, opacity) => {
-    if (!fromIso || !toIso) return '';
-    const a = t(fromIso), b = t(toIso);
-    if (b <= t0 || a >= t1) return '';
-    const xa = xClamped(a), xb = xClamped(b);
-    return xb <= xa ? '' : `<rect x="${xa.toFixed(1)}" y="${padT}" width="${(xb - xa).toFixed(1)}" height="${plotH}" fill="${fill}" opacity="${opacity}"/>`;
-  };
-  const bands = [
-    ...((phenology && phenology.bare_periods) || []).map(bp => bandRect(bp.from, bp.to, BARE_FILL, BARE_OPACITY)),
-    ...((phenology && phenology.seasons) || []).flatMap(s => (s.stages || []).map(st => bandRect(st.from, st.to, STAGE_FILL[st.code], STAGE_OPACITY[st.code]))),
-  ].join('');
+  // Bands drawn first (bottom of the z-order) so gridlines and the curve show through on top. Bare
+  // periods and season stages come from two different phenology.js thresholds (an absolute NDVI cutoff
+  // for bare, a %-of-amplitude cutoff for a season's start/end), so their raw date ranges leave thin
+  // unclassified slivers between them - drawn as-is those read as a missing-data hole, not a deliberate
+  // gap. Instead, every known band (in date order, across every season) is stretched to meet the START
+  // of its neighbor, and the first/last band stretched to the plot's own edges, so the color coding is
+  // one continuous, gap-free timeline. This never changes what the model said, only removes uncolored
+  // seams between things it DID say. A stage missing a from/to (a partial/low-confidence season) is
+  // dropped before this step, so its neighbors simply meet each other across that stretch.
+  const rawBands = [
+    ...((phenology && phenology.bare_periods) || []).map(bp => ({from: bp.from, to: bp.to, fill: BARE_FILL, opacity: BARE_OPACITY})),
+    ...((phenology && phenology.seasons) || []).flatMap(s => (s.stages || []).map(st => ({from: st.from, to: st.to, fill: STAGE_FILL[st.code], opacity: STAGE_OPACITY[st.code]}))),
+  ].filter(b => b.from && b.to).sort((a, b) => t(a.from) - t(b.from));
+  const bands = rawBands.map((b, i) => {
+    const a = i === 0 ? t0 : t(b.from);
+    const bEnd = i === rawBands.length - 1 ? t1 : t(rawBands[i + 1].from);
+    if (bEnd <= t0 || a >= t1) return '';
+    const xa = xClamped(a), xb = xClamped(bEnd);
+    return xb <= xa ? '' : `<rect x="${xa.toFixed(1)}" y="${padT}" width="${(xb - xa).toFixed(1)}" height="${plotH}" fill="${b.fill}" opacity="${b.opacity}"/>`;
+  }).join('');
 
   const d = usable.map((p, i) => `${i ? 'L' : 'M'}${x(t(p.date)).toFixed(1)},${y(p.ndvi).toFixed(1)}`).join('');
   const yTicks = [0, 0.5, 1].map(v => `<line x1="${padL}" x2="${W - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#d8d8c8" stroke-width="1"/>` +
@@ -800,9 +806,9 @@ function ndviChartSvg(series, phenology) {
   // dry-down (eos). These are the exact three dates the text below already names and the "Use as
   // planting/harvest date" buttons already act on - now visible on the chart itself, not only in a
   // sentence below it. A cream halo keeps them legible sitting on top of a stage band.
-  const tri = (cx, cy, up) => `M${cx.toFixed(1)},${(cy + (up ? -3.2 : 3.2)).toFixed(1)} L${(cx - 3.2).toFixed(1)},${(cy + (up ? 3.2 : -3.2)).toFixed(1)} L${(cx + 3.2).toFixed(1)},${(cy + (up ? 3.2 : -3.2)).toFixed(1)} Z`;
-  const diamond = (cx, cy) => `M${cx.toFixed(1)},${(cy - 3.4).toFixed(1)} L${(cx + 3.4).toFixed(1)},${cy.toFixed(1)} L${cx.toFixed(1)},${(cy + 3.4).toFixed(1)} L${(cx - 3.4).toFixed(1)},${cy.toFixed(1)} Z`;
-  const marker = path => `<path d="${path}" fill="#3f7d3f" stroke="#fbfbf5" stroke-width="0.75"/>`;
+  const tri = (cx, cy, up) => `M${cx.toFixed(1)},${(cy + (up ? -4.2 : 4.2)).toFixed(1)} L${(cx - 4.2).toFixed(1)},${(cy + (up ? 4.2 : -4.2)).toFixed(1)} L${(cx + 4.2).toFixed(1)},${(cy + (up ? 4.2 : -4.2)).toFixed(1)} Z`;
+  const diamond = (cx, cy) => `M${cx.toFixed(1)},${(cy - 4.4).toFixed(1)} L${(cx + 4.4).toFixed(1)},${cy.toFixed(1)} L${cx.toFixed(1)},${(cy + 4.4).toFixed(1)} L${(cx - 4.4).toFixed(1)},${cy.toFixed(1)} Z`;
+  const marker = path => `<path d="${path}" fill="#3f7d3f" stroke="#fbfbf5" stroke-width="1"/>`;
   const milestones = ((phenology && phenology.seasons) || []).flatMap(s => {
     const add = (iso, shape) => { const v = valueAt(iso); if (v == null) return ''; const px = xClamped(t(iso)), py = y(v);
       return marker(shape === 'up' ? tri(px, py, true) : shape === 'down' ? tri(px, py, false) : diamond(px, py)); };
